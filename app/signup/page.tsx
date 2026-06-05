@@ -12,6 +12,7 @@ import {
 } from "firebase/auth";
 
 import { auth, googleProvider } from "@/firebase/config";
+import { acceptAdminInvite } from "@/lib/adminInvite";
 
 import {
   Mail,
@@ -41,6 +42,16 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const goAfterSignup = async (user: any) => {
+    const accepted = await acceptAdminInvite(user);
+
+    if (accepted) {
+      router.push("/admin");
+    } else {
+      router.push("/shop");
+    }
+  };
+
   const handleSignup = async () => {
     setError("");
 
@@ -62,17 +73,17 @@ export default function SignupPage() {
     try {
       setLoading(true);
 
-      const userCredential = await createUserWithEmailAndPassword(
+      const result = await createUserWithEmailAndPassword(
         auth,
-        email,
+        email.trim(),
         password
       );
 
-      await updateProfile(userCredential.user, {
-        displayName: name,
+      await updateProfile(result.user, {
+        displayName: name.trim(),
       });
 
-      router.push("/shop");
+      await goAfterSignup(result.user);
     } catch (err: any) {
       if (err.code === "auth/email-already-in-use") {
         setError("This email is already registered. Please login.");
@@ -94,9 +105,9 @@ export default function SignupPage() {
     try {
       setLoading(true);
 
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
 
-      router.push("/shop");
+      await goAfterSignup(result.user);
     } catch {
       setError("Google signup failed. Please try again.");
     } finally {
@@ -105,7 +116,7 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden flex items-center justify-center px-4 py-10">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
       <div
         className="fixed inset-0 -z-20 bg-cover bg-center"
         style={{ backgroundImage: "url('/nature-bg.png')" }}
@@ -113,7 +124,7 @@ export default function SignupPage() {
 
       <div className="fixed inset-0 -z-10 bg-[#f5f1e8]/70 backdrop-blur-[3px]" />
 
-      <section className="glass rounded-[46px] max-w-[720px] w-full p-6 sm:p-10 text-center">
+      <section className="glass w-full max-w-[720px] rounded-[46px] p-6 text-center sm:p-10">
         <Image
           src="/logo.png"
           alt="ZAYY Care"
@@ -124,65 +135,65 @@ export default function SignupPage() {
         />
 
         <div className="glass-soft rounded-[40px] p-7 sm:p-10">
-          <h1 className="dream-font text-[48px] sm:text-[60px] text-[#1f2a1f] leading-none">
+          <h1 className="dream-font text-[48px] leading-none text-[#1f2a1f] sm:text-[60px]">
             Create Account
           </h1>
 
-          <div className="flex items-center justify-center gap-3 mt-4 mb-6 text-[#556B2F]">
+          <div className="mt-4 mb-6 flex items-center justify-center gap-3 text-[#556B2F]">
             <span className="h-px w-20 bg-[#556B2F]/40" />
             <Sparkles size={18} />
             <span className="h-px w-20 bg-[#556B2F]/40" />
           </div>
 
-          <p className="text-gray-600 mb-8">
+          <p className="mb-8 text-gray-600">
             Join ZAYY Care and start your premium skincare journey.
           </p>
 
           <div className="space-y-4">
-            <div className="glass rounded-2xl px-5 py-4 flex items-center gap-3">
+            <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4">
               <User size={20} className="text-[#556B2F]" />
               <input
                 type="text"
                 placeholder="Full Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="bg-transparent outline-none flex-1 text-[#1f2a1f]"
+                className="flex-1 bg-transparent text-[#1f2a1f] outline-none"
               />
             </div>
 
-            <div className="glass rounded-2xl px-5 py-4 flex items-center gap-3">
+            <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4">
               <Mail size={20} className="text-[#556B2F]" />
               <input
                 type="email"
                 placeholder="Email Address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="bg-transparent outline-none flex-1 text-[#1f2a1f]"
+                className="flex-1 bg-transparent text-[#1f2a1f] outline-none"
               />
             </div>
 
-            <div className="glass rounded-2xl px-5 py-4 flex items-center gap-3">
+            <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4">
               <Lock size={20} className="text-[#556B2F]" />
               <input
                 type={showPass ? "text" : "password"}
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="bg-transparent outline-none flex-1 text-[#1f2a1f]"
+                className="flex-1 bg-transparent text-[#1f2a1f] outline-none"
               />
               <button type="button" onClick={() => setShowPass(!showPass)}>
                 <Eye size={18} />
               </button>
             </div>
 
-            <div className="glass rounded-2xl px-5 py-4 flex items-center gap-3">
+            <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4">
               <Lock size={20} className="text-[#556B2F]" />
               <input
                 type={showConfirmPass ? "text" : "password"}
                 placeholder="Confirm Password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="bg-transparent outline-none flex-1 text-[#1f2a1f]"
+                className="flex-1 bg-transparent text-[#1f2a1f] outline-none"
               />
               <button
                 type="button"
@@ -193,9 +204,9 @@ export default function SignupPage() {
             </div>
           </div>
 
-          {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
+          {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
 
-          <div className="space-y-3 text-left mt-6 text-sm">
+          <div className="mt-6 space-y-3 text-left text-sm">
             {[
               "Get exclusive offers & discounts",
               "Track your orders easily",
@@ -211,15 +222,15 @@ export default function SignupPage() {
           <button
             onClick={handleSignup}
             disabled={loading}
-            className="mt-8 w-full bg-[#556B2F] text-white rounded-full py-4 font-semibold premium-hover flex items-center justify-center gap-3 shadow-[0_20px_45px_rgba(85,107,47,0.25)] disabled:opacity-60"
+            className="premium-hover mt-8 flex w-full items-center justify-center gap-3 rounded-full bg-[#556B2F] py-4 font-semibold text-white shadow-[0_20px_45px_rgba(85,107,47,0.25)] disabled:opacity-60"
           >
             {loading ? "Creating..." : "Create Account"}
             <ArrowRight size={20} />
           </button>
 
-          <div className="flex items-center gap-4 my-7">
+          <div className="my-7 flex items-center gap-4">
             <span className="h-px flex-1 bg-black/10" />
-            <span className="text-gray-600 text-sm">or sign up with</span>
+            <span className="text-sm text-gray-600">or sign up with</span>
             <span className="h-px flex-1 bg-black/10" />
           </div>
 
@@ -228,7 +239,7 @@ export default function SignupPage() {
               type="button"
               onClick={handleGoogleSignup}
               disabled={loading}
-              className="glass rounded-2xl py-4 font-medium premium-hover disabled:opacity-60"
+              className="glass premium-hover rounded-2xl py-4 font-medium disabled:opacity-60"
             >
               Google
             </button>
@@ -236,7 +247,7 @@ export default function SignupPage() {
             <button
               type="button"
               disabled
-              className="glass rounded-2xl py-4 font-medium opacity-50 cursor-not-allowed"
+              className="glass cursor-not-allowed rounded-2xl py-4 font-medium opacity-50"
             >
               Facebook
             </button>
@@ -244,25 +255,22 @@ export default function SignupPage() {
 
           <p className="mt-7 text-gray-600">
             Already have an account?{" "}
-            <Link href="/login" className="text-[#556B2F] font-semibold">
+            <Link href="/login" className="font-semibold text-[#556B2F]">
               Login →
             </Link>
           </p>
         </div>
 
-        <div className="glass rounded-[28px] mt-8 p-4 grid sm:grid-cols-2 gap-4 text-sm">
+        <div className="glass mt-8 grid gap-4 rounded-[28px] p-4 text-sm sm:grid-cols-2">
           <p className="flex items-center justify-center gap-2">
             <ShieldCheck className="text-[#556B2F]" /> 100% Authentic
           </p>
-
           <p className="flex items-center justify-center gap-2">
             <Truck className="text-[#556B2F]" /> Free Delivery ৳1500+
           </p>
-
           <p className="flex items-center justify-center gap-2">
             <RefreshCcw className="text-[#556B2F]" /> Easy Return
           </p>
-
           <p className="flex items-center justify-center gap-2">
             <LockKeyhole className="text-[#556B2F]" /> Secure Payment
           </p>
