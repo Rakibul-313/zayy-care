@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "next-themes";
 
+
 export const metadata: Metadata = {
   title: {
     default: "ZAYY Care | Premium Korean Skincare in Bangladesh",
@@ -58,7 +59,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-scroll-behavior="smooth">
       <body>
         <ThemeProvider attribute="class" defaultTheme="light">
           {children}

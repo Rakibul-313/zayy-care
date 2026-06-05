@@ -1,4 +1,11 @@
 @import "tailwindcss";
+@font-face {
+  font-family: "Dream Avenue";
+  src: url("/fonts/DreamAvenue.woff2") format("woff2");
+}
+.dream-font {
+  font-family: Georgia, serif;
+}
 
 :root {
   --color-ink: #142012;
