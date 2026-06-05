@@ -1,0 +1,38 @@
+export const reviews = [
+  {
+    id: 1,
+    productId: 1,
+    name: "Ayesha Rahman",
+    rating: 5,
+    comment: "Very gentle cleanser. Skin feels fresh and clean after use.",
+    verified: true,
+    date: "2026-05-20",
+  },
+  {
+    id: 2,
+    productId: 1,
+    name: "Nusrat Jahan",
+    rating: 4,
+    comment: "Good for daily use. Packaging was also nice.",
+    verified: true,
+    date: "2026-05-18",
+  },
+  {
+    id: 3,
+    productId: 2,
+    name: "Mim Akter",
+    rating: 5,
+    comment: "Loved the texture. It gives a nice glow.",
+    verified: true,
+    date: "2026-05-21",
+  },
+  {
+    id: 4,
+    productId: 3,
+    name: "Sadia Islam",
+    rating: 5,
+    comment: "Serumটা lightweight and smooth.",
+    verified: true,
+    date: "2026-05-22",
+  },
+];
