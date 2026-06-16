@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
 import { onValue, ref } from "firebase/database";
 
 import PremiumProductCard from "@/components/ui/PremiumProductCard";
@@ -24,6 +24,8 @@ type FeaturedProduct = {
   reviews: number;
   stock?: number;
   featured?: boolean;
+  deleted?: boolean;
+  active?: boolean;
 };
 
 function safeImage(src?: string) {
@@ -32,34 +34,23 @@ function safeImage(src?: string) {
 }
 
 export default function FeaturedProducts() {
-  const containerRef = useRef<HTMLDivElement>(null);
-
   const [products, setProducts] = useState<FeaturedProduct[]>([]);
   const [wishlist, setWishlist] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const scrollLeft = () => {
-    containerRef.current?.scrollBy({ left: -340, behavior: "smooth" });
-  };
-
-  const scrollRight = () => {
-    containerRef.current?.scrollBy({ left: 340, behavior: "smooth" });
-  };
-
   useEffect(() => {
-    const productsRef = ref(database, "products");
-
-    const unsubscribe = onValue(productsRef, (snapshot) => {
+    const unsubscribe = onValue(ref(database, "products"), (snapshot) => {
       const data = snapshot.val();
 
       if (!data) {
         setProducts([]);
+        saveFirebaseProducts([]);
         setLoading(false);
         return;
       }
 
-      const formatted: FeaturedProduct[] = Object.entries(data).map(
-        ([firebaseId, value]: any, index) => ({
+      const formatted: FeaturedProduct[] = Object.entries(data)
+        .map(([firebaseId, value]: any, index) => ({
           firebaseId,
           id: Number(value.id || index + 1),
           name: value.name || "Unnamed Product",
@@ -73,8 +64,15 @@ export default function FeaturedProducts() {
           reviews: Number(value.reviews || 0),
           stock: Number(value.stock || 0),
           featured: Boolean(value.featured),
-        })
-      );
+          deleted: Boolean(value.deleted),
+          active: value.active !== false,
+        }))
+        .filter(
+          (product) =>
+            product.deleted !== true &&
+            product.active !== false &&
+            product.stock !== 0
+        );
 
       const featured = formatted.filter((product) => product.featured);
 
@@ -131,66 +129,37 @@ export default function FeaturedProducts() {
     <section className="px-4 sm:px-8 lg:px-14">
       <div className="mx-auto w-full max-w-[1820px]">
         <div className="mb-5 flex items-center justify-between gap-4">
-          <h2 className="dream-font text-[38px] leading-none text-[#142012] sm:text-[48px]">
+          <h2 className="dream-font text-[34px] leading-none text-[#142012] sm:text-[48px]">
             Featured Collection <span className="text-[#556B2F]">+</span>
           </h2>
 
-          <div className="flex items-center gap-4">
-            <Link
-              href="/shop"
-              className="hidden items-center gap-2 text-sm font-bold text-[#31571f] sm:inline-flex"
-            >
-              View All Products
-              <ArrowRight size={16} />
-            </Link>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                aria-label="Scroll featured products left"
-                onClick={scrollLeft}
-                className="glass-soft flex h-11 w-11 items-center justify-center rounded-full text-[#31571f] transition hover:-translate-y-1"
-              >
-                <ArrowLeft size={18} />
-              </button>
-
-              <button
-                type="button"
-                aria-label="Scroll featured products right"
-                onClick={scrollRight}
-                className="glass-soft flex h-11 w-11 items-center justify-center rounded-full text-[#31571f] transition hover:-translate-y-1"
-              >
-                <ArrowRight size={18} />
-              </button>
-            </div>
-          </div>
+          <Link
+            href="/shop"
+            className="hidden items-center gap-2 text-sm font-black text-[#0b3d2e] transition-all duration-300 hover:-translate-y-0.5 hover:text-[#062a18] sm:inline-flex"
+          >
+            View All Products
+            <ArrowRight size={16} />
+          </Link>
         </div>
 
-        <div
-          ref={containerRef}
-          className="flex w-full gap-5 overflow-x-auto scroll-smooth pb-3 scrollbar-hide"
-          style={{
-            scrollBehavior: "smooth",
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
-          {loading ? (
-            <div className="glass rounded-[30px] p-8 text-[#263421]">
-              Loading featured products...
-            </div>
-          ) : (
-            products.map((product) => (
+        {loading ? (
+          <div className="glass rounded-[20px] p-8 text-[#263421]">
+            Loading featured products...
+          </div>
+        ) : (
+          <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {products.map((product) => (
               <PremiumProductCard
                 key={product.firebaseId || product.id}
                 product={product as any}
-                className="w-[270px] shrink-0 md:w-[286px]"
+                className="w-full transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(11,61,46,0.18)]"
                 isWishlisted={wishlist.includes(product.id)}
                 onToggleWishlist={handleToggleWishlist}
                 onAddToCart={handleAddToCart}
               />
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

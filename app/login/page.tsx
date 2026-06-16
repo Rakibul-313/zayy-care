@@ -1,29 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
+  type User,
 } from "firebase/auth";
+import { CheckCircle, Eye, Lock, Mail, X } from "lucide-react";
 
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import { auth, googleProvider } from "@/firebase/config";
+import { isAdminUser } from "@/lib/admin";
 import { acceptAdminInvite } from "@/lib/adminInvite";
-
-import {
-  Mail,
-  Lock,
-  Eye,
-  ArrowRight,
-  ShieldCheck,
-  Truck,
-  RefreshCcw,
-  LockKeyhole,
-  Sparkles,
-} from "lucide-react";
+import { getCartCount } from "@/lib/cart";
+import { getWishlistCount } from "@/lib/wishlist";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,21 +27,34 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
-  const goAfterLogin = async (user: any) => {
-    const accepted = await acceptAdminInvite(user);
+  const goAfterLogin = async (user: User) => {
+    try {
+      await acceptAdminInvite(user);
 
-    if (accepted) {
-      router.push("/admin");
-    } else {
-      router.push("/shop");
+      const admin = await isAdminUser(user.uid);
+
+      setSuccess(true);
+
+      setTimeout(() => {
+        router.push(admin ? "/admin" : "/shop");
+      }, 900);
+    } catch (error) {
+      console.error(error);
+
+      setSuccess(true);
+
+      setTimeout(() => {
+        router.push("/shop");
+      }, 900);
     }
   };
 
   const handleLogin = async () => {
     setError("");
 
-    if (!email || !password) {
+    if (!email.trim() || !password) {
       setError("Please enter email and password.");
       return;
     }
@@ -64,7 +70,17 @@ export default function LoginPage() {
 
       await goAfterLogin(result.user);
     } catch (error: any) {
-      setError(error.code || "Login failed.");
+      if (error.code === "auth/user-not-found") {
+        setError("Account not found.");
+      } else if (error.code === "auth/wrong-password") {
+        setError("Incorrect password.");
+      } else if (error.code === "auth/invalid-credential") {
+        setError("Invalid email or password.");
+      } else if (error.code === "auth/too-many-requests") {
+        setError("Too many attempts. Please try again later.");
+      } else {
+        setError("Login failed.");
+      }
     } finally {
       setLoading(false);
     }
@@ -79,7 +95,8 @@ export default function LoginPage() {
       const result = await signInWithPopup(auth, googleProvider);
 
       await goAfterLogin(result.user);
-    } catch {
+    } catch (error) {
+      console.error(error);
       setError("Google login failed.");
     } finally {
       setLoading(false);
@@ -87,119 +104,179 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-      <div
-        className="fixed inset-0 -z-20 bg-cover bg-center"
-        style={{ backgroundImage: "url('/nature-bg.png')" }}
-      />
+    <>
+      <Navbar cartCount={getCartCount()} wishlistCount={getWishlistCount()} />
 
-      <div className="fixed inset-0 -z-10 bg-[#f5f1e8]/70 backdrop-blur-[3px]" />
+      <main className="min-h-screen bg-[#fafaf7]">
+        <section className="flex min-h-[calc(100vh-120px)] items-center justify-center px-4 pt-[115px] pb-12 sm:px-8 lg:px-14 lg:pt-[130px]">
+          <div className="w-full max-w-[680px]">
+            <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-6 shadow-[0_12px_34px_rgba(11,61,46,0.08)] sm:p-10">
+              {success ? (
+                <div className="py-16 text-center">
+                  <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-[#e9f6ed] text-[#0b3d2e]">
+                    <CheckCircle size={64} />
+                  </div>
 
-      <section className="glass w-full max-w-[720px] rounded-[46px] p-6 text-center sm:p-10">
-        <Image
-          src="/logo.png"
-          alt="ZAYY Care"
-          width={280}
-          height={150}
-          priority
-          className="mx-auto mb-8"
-        />
+                  <h1 className="mt-9 text-4xl font-black text-[#0b3d2e]">
+                    Login Successful!
+                  </h1>
 
-        <div className="glass-soft rounded-[40px] p-7 sm:p-10">
-          <h1 className="dream-font text-[48px] leading-none text-[#1f2a1f] sm:text-[60px]">
-            Welcome Back
-          </h1>
+                  <p className="mt-4 text-lg text-[#4f5f49]">
+                    Welcome back to Zayy Care 💚
+                  </p>
 
-          <div className="mt-4 mb-6 flex items-center justify-center gap-3 text-[#556B2F]">
-            <span className="h-px w-20 bg-[#556B2F]/40" />
-            <Sparkles size={18} />
-            <span className="h-px w-20 bg-[#556B2F]/40" />
-          </div>
+                  <Link
+                    href="/shop"
+                    className="mt-10 flex h-14 items-center justify-center rounded-[6px] bg-[#0b3d2e] text-sm font-black uppercase tracking-wide text-white"
+                  >
+                    Continue Shopping
+                  </Link>
 
-          <p className="mb-8 text-gray-600">
-            Login to your account and continue your skincare journey.
-          </p>
+                  <Link
+                    href="/profile"
+                    className="mt-4 flex h-14 items-center justify-center rounded-[6px] border border-[#0b3d2e]/30 text-sm font-black uppercase tracking-wide text-[#0b3d2e]"
+                  >
+                    Go To My Account
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-10 text-center">
+                    <h1 className="dream-font text-[42px] leading-none text-[#0b3d2e] sm:text-[54px]">
+                      Login to your account
+                    </h1>
 
-          <div className="space-y-4">
-            <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4">
-              <Mail size={20} className="text-[#556B2F]" />
-              <input
-                type="email"
-                placeholder="Email Address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="flex-1 bg-transparent text-[#1f2a1f] outline-none"
-              />
+                    <p className="mt-4 text-[#4f5f49]">
+                      Enter your credentials to access your account
+                    </p>
+                  </div>
+
+                  <div className="space-y-5">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-bold text-[#102015]">
+                        Email Address
+                      </span>
+
+                      <div className="flex h-14 items-center gap-3 rounded-[6px] border border-[#0b3d2e]/15 bg-[#fafaf7] px-4">
+                        <Mail size={20} className="text-[#7c8777]" />
+
+                        <input
+                          type="email"
+                          placeholder="Enter your email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="w-full bg-transparent text-[#102015] outline-none placeholder:text-[#7c8777]"
+                        />
+
+                        {email && (
+                          <button type="button" onClick={() => setEmail("")}>
+                            <X size={18} className="text-[#7c8777]" />
+                          </button>
+                        )}
+                      </div>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-bold text-[#102015]">
+                        Password
+                      </span>
+
+                      <div className="flex h-14 items-center gap-3 rounded-[6px] border border-[#0b3d2e]/15 bg-[#fafaf7] px-4">
+                        <Lock size={20} className="text-[#7c8777]" />
+
+                        <input
+                          type={showPass ? "text" : "password"}
+                          placeholder="Enter your password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="w-full bg-transparent text-[#102015] outline-none placeholder:text-[#7c8777]"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => setShowPass(!showPass)}
+                        >
+                          <Eye size={19} className="text-[#7c8777]" />
+                        </button>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="mt-4 flex justify-end">
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm font-black text-[#0b3d2e]"
+                    >
+                      Forgot Password?
+                    </Link>
+                  </div>
+
+                  {error && (
+                    <p className="mt-4 rounded-[6px] bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
+                      {error}
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleLogin}
+                    disabled={loading}
+                    className="mt-7 flex h-14 w-full items-center justify-center rounded-[6px] bg-[#0b3d2e] text-sm font-black uppercase tracking-wide text-white disabled:opacity-60"
+                  >
+                    {loading ? "Logging in..." : "Login"}
+                  </button>
+
+                  <div className="my-7 flex items-center gap-4">
+                    <span className="h-px flex-1 bg-[#0b3d2e]/10" />
+
+                    <span className="text-sm text-[#4f5f49]">
+                      or continue with
+                    </span>
+
+                    <span className="h-px flex-1 bg-[#0b3d2e]/10" />
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <button
+                      type="button"
+                      onClick={handleGoogleLogin}
+                      disabled={loading}
+                      className="flex h-12 items-center justify-center rounded-[6px] border border-[#0b3d2e]/15 bg-white font-bold text-[#102015] disabled:opacity-60"
+                    >
+                      Google
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled
+                      className="flex h-12 items-center justify-center rounded-[6px] border border-[#0b3d2e]/15 bg-white font-bold text-[#102015] opacity-60"
+                    >
+                      Apple
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled
+                      className="flex h-12 items-center justify-center rounded-[6px] border border-[#0b3d2e]/15 bg-white font-bold text-[#102015] opacity-60"
+                    >
+                      Facebook
+                    </button>
+                  </div>
+
+                  <p className="mt-8 text-center text-[#4f5f49]">
+                    Don’t have an account?{" "}
+                    <Link href="/signup" className="font-black text-[#0b3d2e]">
+                      Sign Up
+                    </Link>
+                  </p>
+                </>
+              )}
             </div>
-
-            <div className="glass flex items-center gap-3 rounded-2xl px-5 py-4">
-              <Lock size={20} className="text-[#556B2F]" />
-              <input
-                type={showPass ? "text" : "password"}
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="flex-1 bg-transparent text-[#1f2a1f] outline-none"
-              />
-
-              <button type="button" onClick={() => setShowPass(!showPass)}>
-                <Eye size={18} />
-              </button>
-            </div>
           </div>
+        </section>
 
-          {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
-
-          <button
-            onClick={handleLogin}
-            disabled={loading}
-            className="premium-hover mt-8 flex w-full items-center justify-center gap-3 rounded-full bg-[#556B2F] py-4 font-semibold text-white shadow-[0_20px_45px_rgba(85,107,47,0.25)] disabled:opacity-60"
-          >
-            {loading ? "Logging in..." : "Login"} <ArrowRight size={20} />
-          </button>
-
-          <div className="my-7 flex items-center gap-4">
-            <span className="h-px flex-1 bg-black/10" />
-            <span className="text-sm text-gray-600">or login with</span>
-            <span className="h-px flex-1 bg-black/10" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="glass premium-hover rounded-2xl py-4 font-medium disabled:opacity-60"
-            >
-              Google
-            </button>
-
-           
-          </div>
-
-          <p className="mt-7 text-gray-600">
-            Don’t have an account?{" "}
-            <Link href="/signup" className="font-semibold text-[#556B2F]">
-              Sign Up →
-            </Link>
-          </p>
-        </div>
-
-        <div className="glass mt-8 grid gap-4 rounded-[28px] p-4 text-sm sm:grid-cols-2">
-          <p className="flex items-center justify-center gap-2">
-            <ShieldCheck className="text-[#556B2F]" /> 100% Authentic
-          </p>
-          <p className="flex items-center justify-center gap-2">
-            <Truck className="text-[#556B2F]" /> Free Delivery ৳1500+
-          </p>
-          <p className="flex items-center justify-center gap-2">
-            <RefreshCcw className="text-[#556B2F]" /> Easy Return
-          </p>
-          <p className="flex items-center justify-center gap-2">
-            <LockKeyhole className="text-[#556B2F]" /> Secure Payment
-          </p>
-        </div>
-      </section>
-    </main>
+        <Footer />
+      </main>
+    </>
   );
 }

@@ -3,13 +3,7 @@
 import { useEffect, useState } from "react";
 import { onValue, ref, set } from "firebase/database";
 import { database } from "@/firebase/config";
-import {
-  Store,
-  Mail,
-  MapPin,
-  Phone,
-  Save,
-} from "lucide-react";
+import { Store, Mail, MapPin, Phone, Save, Eye } from "lucide-react";
 
 type GeneralSettings = {
   siteName: string;
@@ -29,13 +23,14 @@ type GeneralSettings = {
 
 const defaultSettings: GeneralSettings = {
   siteName: "ZAYY Care",
-  siteTagline: "Premium Korean Skincare in Bangladesh",
+  siteTagline:
+    "We’d love to hear from you! Whether you have a question about our products, need help with an order, or just want to say hello.",
   logo: "/logo.png",
   favicon: "/favicon.ico",
-  phone: "",
+  phone: "+880 1234-567890",
   whatsapp: "",
-  email: "",
-  address: "",
+  email: "support@zayycare.com",
+  address: "House 12, Road 5, Dhanmondi, Dhaka 1205, Bangladesh",
   facebook: "",
   instagram: "",
   tiktok: "",
@@ -86,8 +81,12 @@ export default function GeneralSettingsPage() {
 
       alert("General settings saved successfully.");
     } catch (error) {
-      console.log(error);
-      alert("Failed to save general settings.");
+      console.error(error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to save general settings."
+      );
     } finally {
       setSaving(false);
     }
@@ -95,7 +94,7 @@ export default function GeneralSettingsPage() {
 
   if (loading) {
     return (
-      <div className="rounded-[30px] border border-white/65 bg-white/36 p-10 text-center shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
+      <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#FCFCFA] p-10 text-center text-[#4f5f49] shadow-[0_8px_24px_rgba(11,61,46,0.08)]">
         Loading general settings...
       </div>
     );
@@ -103,15 +102,16 @@ export default function GeneralSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#FCFCFA] p-6 shadow-[0_8px_24px_rgba(11,61,46,0.08)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-[#172313]">
+            <h1 className="text-4xl font-black text-[#102015]">
               General Settings
             </h1>
 
-            <p className="mt-2 text-gray-600">
-              Manage store branding, contact information and social links.
+            <p className="mt-2 text-[#4f5f49]">
+              Manage store branding, contact information, social links and
+              footer text.
             </p>
           </div>
 
@@ -119,7 +119,7 @@ export default function GeneralSettingsPage() {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 rounded-2xl bg-[#556B2F] px-6 py-4 font-semibold text-white disabled:opacity-60"
+            className="flex h-12 items-center gap-2 rounded-[6px] bg-[#003f2a] px-6 text-sm font-black uppercase text-white disabled:opacity-60"
           >
             <Save size={18} />
             {saving ? "Saving..." : "Save Settings"}
@@ -129,251 +129,323 @@ export default function GeneralSettingsPage() {
 
       <section className="grid gap-6 xl:grid-cols-[1fr_.7fr]">
         <div className="space-y-6">
-          <div className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-            <div className="mb-5 flex items-center gap-3">
-              <Store className="text-[#556B2F]" />
-              <h2 className="text-2xl font-bold text-[#172313]">
-                Store Branding
-              </h2>
-            </div>
-
+          <SettingsCard
+            icon={Store}
+            title="Store Branding"
+            description="Control website name, tagline, logo and favicon."
+          >
             <div className="grid gap-4 md:grid-cols-2">
-              <input
+              <Field
+                label="Site Name"
                 value={settings.siteName}
-                onChange={(e) => updateField("siteName", e.target.value)}
-                placeholder="Site Name"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                onChange={(value) => updateField("siteName", value)}
               />
 
-              <input
+              <Field
+                label="Site Tagline"
                 value={settings.siteTagline}
-                onChange={(e) => updateField("siteTagline", e.target.value)}
-                placeholder="Site Tagline"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                onChange={(value) => updateField("siteTagline", value)}
               />
 
-              <input
+              <Field
+                label="Logo URL"
                 value={settings.logo}
-                onChange={(e) => updateField("logo", e.target.value)}
-                placeholder="Logo URL e.g. /logo.png"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                onChange={(value) => updateField("logo", value)}
+                placeholder="/logo.png"
               />
 
-              <input
+              <Field
+                label="Favicon URL"
                 value={settings.favicon}
-                onChange={(e) => updateField("favicon", e.target.value)}
-                placeholder="Favicon URL e.g. /favicon.ico"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                onChange={(value) => updateField("favicon", value)}
+                placeholder="/favicon.ico"
               />
             </div>
-          </div>
+          </SettingsCard>
 
-          <div className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-            <div className="mb-5 flex items-center gap-3">
-              <Phone className="text-[#556B2F]" />
-              <h2 className="text-2xl font-bold text-[#172313]">
-                Contact Information
-              </h2>
-            </div>
-
+          <SettingsCard
+            icon={Phone}
+            title="Contact Information"
+            description="This data will show on the contact page in real-time."
+          >
             <div className="grid gap-4 md:grid-cols-2">
-              <input
+              <Field
+                label="Phone Number"
                 value={settings.phone}
-                onChange={(e) => updateField("phone", e.target.value)}
-                placeholder="Phone Number"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                onChange={(value) => updateField("phone", value)}
               />
 
-              <input
+              <Field
+                label="WhatsApp Number / URL"
                 value={settings.whatsapp}
-                onChange={(e) => updateField("whatsapp", e.target.value)}
-                placeholder="WhatsApp Number"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                onChange={(value) => updateField("whatsapp", value)}
               />
 
-              <input
-                value={settings.email}
-                onChange={(e) => updateField("email", e.target.value)}
-                placeholder="Email Address"
+              <Field
+                label="Email Address"
                 type="email"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                value={settings.email}
+                onChange={(value) => updateField("email", value)}
               />
 
-              <input
+              <Field
+                label="Business Address"
                 value={settings.address}
-                onChange={(e) => updateField("address", e.target.value)}
-                placeholder="Business Address"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                onChange={(value) => updateField("address", value)}
               />
             </div>
-          </div>
+          </SettingsCard>
 
-          <div className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-            <div className="mb-5 flex items-center gap-3">
-              <span className="font-black text-[#556B2F]">IG</span>
-              <h2 className="text-2xl font-bold text-[#172313]">
-                Social Media
-              </h2>
-            </div>
-
+          <SettingsCard
+            icon={Mail}
+            title="Social Media"
+            description="Footer and social preview links."
+          >
             <div className="grid gap-4 md:grid-cols-2">
-              <input
+              <Field
+                label="Facebook URL"
                 value={settings.facebook}
-                onChange={(e) => updateField("facebook", e.target.value)}
-                placeholder="Facebook Page URL"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                onChange={(value) => updateField("facebook", value)}
               />
 
-              <input
+              <Field
+                label="Instagram URL"
                 value={settings.instagram}
-                onChange={(e) => updateField("instagram", e.target.value)}
-                placeholder="Instagram URL"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                onChange={(value) => updateField("instagram", value)}
               />
 
-              <input
+              <Field
+                label="TikTok URL"
                 value={settings.tiktok}
-                onChange={(e) => updateField("tiktok", e.target.value)}
-                placeholder="TikTok URL"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                onChange={(value) => updateField("tiktok", value)}
               />
 
-              <input
+              <Field
+                label="YouTube URL"
                 value={settings.youtube}
-                onChange={(e) => updateField("youtube", e.target.value)}
-                placeholder="YouTube URL"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
-              />
-
-              <input
-                value={settings.whatsapp}
-                onChange={(e) => updateField("whatsapp", e.target.value)}
-                placeholder="WhatsApp URL"
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                onChange={(value) => updateField("youtube", value)}
               />
             </div>
-          </div>
+          </SettingsCard>
 
-          <div className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-            <h2 className="mb-5 text-2xl font-bold text-[#172313]">
-              Footer Text
-            </h2>
-
+          <SettingsCard
+            icon={Mail}
+            title="Footer Text"
+            description="Short brand text for footer."
+          >
             <textarea
               value={settings.footerText}
               onChange={(e) => updateField("footerText", e.target.value)}
               placeholder="Footer text"
               rows={4}
-              className="w-full resize-none rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+              className="w-full resize-none rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-5 py-4 text-[#102015] outline-none placeholder:text-[#7c8777]"
             />
-          </div>
+          </SettingsCard>
         </div>
 
         <aside className="space-y-6">
-          <div className="rounded-[30px] border border-white/65 bg-white/36 p-6 text-center shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-            <h2 className="mb-5 text-2xl font-bold text-[#172313]">
-              Live Preview
-            </h2>
-
-            <div className="rounded-[28px] bg-white/45 p-8">
+          <PreviewCard title="Live Preview" icon={Eye}>
+            <div className="rounded-[6px] bg-[#f5f1e8] p-6 text-center">
               <img
                 src={settings.logo || "/logo.png"}
                 alt={settings.siteName}
                 className="mx-auto h-24 w-auto object-contain"
               />
 
-              <h3 className="mt-5 text-3xl font-black text-[#172313]">
+              <h3 className="mt-5 text-3xl font-black text-[#102015]">
                 {settings.siteName}
               </h3>
 
-              <p className="mt-2 text-gray-600">
+              <p className="mt-2 text-sm leading-6 text-[#4f5f49]">
                 {settings.siteTagline}
               </p>
             </div>
-          </div>
+          </PreviewCard>
 
-          <div className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-            <h2 className="mb-5 text-2xl font-bold text-[#172313]">
-              Contact Preview
-            </h2>
+          <PreviewCard title="Contact Preview" icon={Phone}>
+            <div className="space-y-4 text-sm text-[#4f5f49]">
+              <PreviewLine
+                icon={Phone}
+                text={settings.phone || "No phone added"}
+              />
 
-            <div className="space-y-4 text-sm text-gray-700">
-              <p className="flex items-center gap-3">
-                <Phone className="text-[#556B2F]" size={18} />
-                {settings.phone || "No phone added"}
-              </p>
+              <PreviewLine
+                icon={Mail}
+                text={settings.email || "No email added"}
+              />
 
-              <p className="flex items-center gap-3">
-                <Mail className="text-[#556B2F]" size={18} />
-                {settings.email || "No email added"}
-              </p>
-
-              <p className="flex items-start gap-3">
-                <MapPin className="mt-0.5 text-[#556B2F]" size={18} />
-                {settings.address || "No address added"}
-              </p>
+              <PreviewLine
+                icon={MapPin}
+                text={settings.address || "No address added"}
+              />
             </div>
-          </div>
+          </PreviewCard>
 
-          <div className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-            <h2 className="mb-5 text-2xl font-bold text-[#172313]">
-              Social Preview
-            </h2>
-
+          <PreviewCard title="Social Preview" icon={Mail}>
             <div className="flex flex-wrap gap-3">
               {settings.facebook && (
-                <a
-                  href={settings.facebook}
-                  target="_blank"
-                  className="rounded-full bg-white/45 p-3 text-[#556B2F]"
-                >
-                  <div>FB</div>
-                </a>
+                <SocialLink href={settings.facebook} label="FB" />
               )}
 
               {settings.instagram && (
-                <a
-                  href={settings.instagram}
-                  target="_blank"
-                  className="rounded-full bg-white/45 p-3 text-[#556B2F]"
-                >
-                  <div>IG</div>
-                </a>
+                <SocialLink href={settings.instagram} label="IG" />
               )}
 
               {settings.youtube && (
-                <a
-                  href={settings.youtube}
-                  target="_blank"
-                  className="rounded-full bg-white/45 p-3 text-[#556B2F]"
-                >
-                  <div>YT</div>
-                </a>
+                <SocialLink href={settings.youtube} label="YT" />
               )}
 
               {settings.tiktok && (
-                <a
-                  href={settings.tiktok}
-                  target="_blank"
-                  className="rounded-full bg-white/45 p-3 text-[#556B2F]"
-                >
-                  TikTok
-                </a>
+                <SocialLink href={settings.tiktok} label="TikTok" />
               )}
 
               {settings.whatsapp && (
-                <a
-                  href={settings.whatsapp}
-                  target="_blank"
-                  className="rounded-full bg-white/45 p-3 text-[#556B2F]"
-                >
-                  WA
-                </a>
+                <SocialLink href={settings.whatsapp} label="WA" />
               )}
+
+              {!settings.facebook &&
+                !settings.instagram &&
+                !settings.youtube &&
+                !settings.tiktok &&
+                !settings.whatsapp && (
+                  <p className="text-sm text-[#4f5f49]">
+                    No social links added.
+                  </p>
+                )}
             </div>
-          </div>
+          </PreviewCard>
+
+          <PreviewCard title="Contact Page Map" icon={MapPin}>
+            <div className="overflow-hidden rounded-[6px] border border-[#0b3d2e]/10">
+              <iframe
+                title="Contact map preview"
+                src={`https://www.google.com/maps?q=${encodeURIComponent(
+                  settings.address || "Dhanmondi Dhaka Bangladesh"
+                )}&output=embed`}
+                className="h-[220px] w-full border-0"
+                loading="lazy"
+              />
+            </div>
+          </PreviewCard>
         </aside>
       </section>
     </div>
+  );
+}
+
+function SettingsCard({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: any;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#FCFCFA] p-6 shadow-[0_8px_24px_rgba(11,61,46,0.08)]">
+      <div className="mb-5 flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] bg-[#e9f6ed] text-[#0b3d2e]">
+          <Icon size={20} />
+        </div>
+
+        <div>
+          <h2 className="text-2xl font-black text-[#102015]">{title}</h2>
+          <p className="mt-1 text-sm text-[#4f5f49]">{description}</p>
+        </div>
+      </div>
+
+      {children}
+    </div>
+  );
+}
+
+function PreviewCard({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: any;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#FCFCFA] p-6 shadow-[0_8px_24px_rgba(11,61,46,0.08)]">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-[6px] bg-[#e9f6ed] text-[#0b3d2e]">
+          <Icon size={18} />
+        </div>
+
+        <h2 className="text-2xl font-black text-[#102015]">{title}</h2>
+      </div>
+
+      {children}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-black text-[#102015]">
+        {label}
+      </span>
+
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder || label}
+        className="h-12 w-full rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-5 text-[#102015] outline-none placeholder:text-[#7c8777]"
+      />
+    </label>
+  );
+}
+
+function PreviewLine({
+  icon: Icon,
+  text,
+}: {
+  icon: any;
+  text: string;
+}) {
+  return (
+    <p className="flex items-start gap-3">
+      <Icon className="mt-0.5 text-[#0b3d2e]" size={18} />
+      <span>{text}</span>
+    </p>
+  );
+}
+
+function SocialLink({
+  href,
+  label,
+}: {
+  href: string;
+  label: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex h-10 items-center justify-center rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] px-3 text-sm font-black text-[#0b3d2e]"
+    >
+      {label}
+    </a>
   );
 }

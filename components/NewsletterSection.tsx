@@ -58,22 +58,22 @@ export default function NewsletterSection() {
 
   return (
     <section className="px-4 sm:px-8 lg:px-14">
-      <div className="glass glass-premium mx-auto max-w-[1820px] overflow-hidden rounded-[40px] p-8 lg:p-12">
-        <div className="grid items-center gap-8 lg:grid-cols-[1fr_.9fr]">
+      <div className="mx-auto max-w-[1820px] rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] p-5 shadow-[0_14px_40px_rgba(11,61,46,0.08)] sm:p-7 lg:p-8">
+        <div className="grid items-center gap-6 lg:grid-cols-[1fr_.8fr]">
           <div>
-            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/45 text-[#31571f] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-              <Mail size={26} />
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-[6px] bg-[#edf3f0] text-[#0b3d2e]">
+              <Mail size={22} />
             </div>
 
-            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#556B2F]">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#0b3d2e]">
               ZAYY Care Newsletter
             </p>
 
-            <h2 className="dream-font mt-3 text-[44px] leading-none text-[#142012] sm:text-[58px]">
+            <h2 className="dream-font mt-3 text-[34px] leading-none text-[#142012] sm:text-[46px]">
               Get skincare tips & exclusive offers
             </h2>
 
-            <p className="mt-5 max-w-[720px] text-[16px] leading-8 text-[#435041]">
+            <p className="mt-4 max-w-[720px] text-[14px] leading-7 text-[#435041] sm:text-[15px]">
               Join our newsletter for Korean skincare routines, new arrivals,
               special discounts, and glow-focused beauty updates.
             </p>
@@ -81,9 +81,9 @@ export default function NewsletterSection() {
 
           <form
             onSubmit={handleSubscribe}
-            className="glass-soft rounded-[32px] p-5 sm:p-6"
+            className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-4 shadow-[0_8px_24px_rgba(11,61,46,0.06)] sm:p-5"
           >
-            <label className="mb-3 block font-bold text-[#142012]">
+            <label className="mb-3 block text-sm font-bold text-[#142012]">
               Email Address
             </label>
 
@@ -93,15 +93,15 @@ export default function NewsletterSection() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
-                className="min-h-[58px] flex-1 rounded-2xl bg-white/55 px-5 font-medium text-[#142012] outline-none placeholder:text-[#6b7568]"
+                className="min-h-[50px] flex-1 rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-4 text-sm font-medium text-[#142012] outline-none placeholder:text-[#6b7568] focus:border-[#0b3d2e]/30"
               />
 
               <button
                 type="submit"
                 disabled={saving}
-                className="inline-flex min-h-[58px] items-center justify-center gap-2 rounded-2xl bg-[#31571f] px-7 font-bold text-white shadow-[0_18px_40px_rgba(49,87,31,0.25)] transition hover:-translate-y-0.5 disabled:opacity-60"
+                className="inline-flex min-h-[50px] items-center justify-center gap-2 rounded-[6px] bg-[linear-gradient(90deg,#062a18_0%,#0b3d2e_50%,#062a18_100%)] px-6 text-sm font-black text-white shadow-[0_12px_28px_rgba(11,61,46,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(11,61,46,0.3)] disabled:opacity-60"
               >
-                <Send size={18} />
+                <Send size={17} />
                 {saving ? "Joining..." : "Join"}
               </button>
             </div>
@@ -110,7 +110,7 @@ export default function NewsletterSection() {
               <p
                 className={`mt-4 text-sm font-semibold ${
                   message.includes("successfully")
-                    ? "text-[#31571f]"
+                    ? "text-[#0b3d2e]"
                     : "text-red-500"
                 }`}
               >

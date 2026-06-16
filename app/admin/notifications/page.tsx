@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { onValue, ref, update } from "firebase/database";
-import { database } from "@/firebase/config";
 import {
   AlertTriangle,
   Bell,
@@ -16,6 +15,8 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
+import { database } from "@/firebase/config";
+import { updateOrderStatusWithStock } from "@/lib/orderStock";
 
 type Order = {
   id: string;
@@ -34,6 +35,7 @@ type Order = {
 
 type Review = {
   id: string;
+  deleted?: boolean;
   productName?: string;
   customerName?: string;
   approved?: boolean;
@@ -41,6 +43,7 @@ type Review = {
 };
 
 type Product = {
+  deleted?: boolean;
   firebaseId: string;
   name?: string;
   stock?: number;
@@ -49,6 +52,7 @@ type Product = {
 
 type Subscriber = {
   id: string;
+  deleted?: boolean;
   email?: string;
   createdAt?: number;
 };
@@ -60,9 +64,12 @@ type UserProfile = {
   createdAt?: number;
 };
 
+type NotificationType = "order" | "review" | "stock" | "subscriber" | "customer";
+type NotificationFilter = "all" | NotificationType;
+
 type NotificationItem = {
   id: string;
-  type: "order" | "review" | "stock" | "subscriber" | "customer";
+  type: NotificationType;
   title: string;
   message: string;
   href: string;
@@ -85,20 +92,47 @@ export default function AdminNotificationsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState<NotificationFilter>("all");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let loadedOrders = false;
+    let loadedReviews = false;
+    let loadedProducts = false;
+    let loadedSubscribers = false;
+    let loadedUsers = false;
+
+    const checkLoading = () => {
+      if (
+        loadedOrders &&
+        loadedReviews &&
+        loadedProducts &&
+        loadedSubscribers &&
+        loadedUsers
+      ) {
+        setLoading(false);
+      }
+    };
+
     const unsubOrders = onValue(ref(database, "orders"), (snapshot) => {
       const data = snapshot.val();
 
       setOrders(
         data
-          ? Object.entries(data).map(([id, value]: any) => ({
-              id,
-              ...value,
-            }))
+          ? Object.entries(data)
+              .map(([id, value]) => ({
+                id,
+                ...(value as Omit<Order, "id">),
+              }))
+              .sort(
+                (a: Order, b: Order) =>
+                  Number(b.createdAt || 0) - Number(a.createdAt || 0)
+              )
           : []
       );
+
+      loadedOrders = true;
+      checkLoading();
     });
 
     const unsubReviews = onValue(ref(database, "reviews"), (snapshot) => {
@@ -106,12 +140,21 @@ export default function AdminNotificationsPage() {
 
       setReviews(
         data
-          ? Object.entries(data).map(([id, value]: any) => ({
-              id,
-              ...value,
-            }))
+          ? Object.entries(data)
+              .map(([id, value]) => ({
+                id,
+                ...(value as Omit<Review, "id">),
+              }))
+              .filter((review) => review.deleted !== true)
+              .sort(
+                (a: Review, b: Review) =>
+                  Number(b.createdAt || 0) - Number(a.createdAt || 0)
+              )
           : []
       );
+
+      loadedReviews = true;
+      checkLoading();
     });
 
     const unsubProducts = onValue(ref(database, "products"), (snapshot) => {
@@ -119,12 +162,17 @@ export default function AdminNotificationsPage() {
 
       setProducts(
         data
-          ? Object.entries(data).map(([firebaseId, value]: any) => ({
-              firebaseId,
-              ...value,
-            }))
+          ? Object.entries(data)
+              .map(([firebaseId, value]) => ({
+                firebaseId,
+                ...(value as Omit<Product, "firebaseId">),
+              }))
+              .filter((product) => product.deleted !== true)
           : []
       );
+
+      loadedProducts = true;
+      checkLoading();
     });
 
     const unsubSubscribers = onValue(ref(database, "subscribers"), (snapshot) => {
@@ -132,12 +180,21 @@ export default function AdminNotificationsPage() {
 
       setSubscribers(
         data
-          ? Object.entries(data).map(([id, value]: any) => ({
-              id,
-              ...value,
-            }))
+          ? Object.entries(data)
+              .map(([id, value]) => ({
+                id,
+                ...(value as Omit<Subscriber, "id">),
+              }))
+              .filter((subscriber) => subscriber.deleted !== true)
+              .sort(
+                (a: Subscriber, b: Subscriber) =>
+                  Number(b.createdAt || 0) - Number(a.createdAt || 0)
+              )
           : []
       );
+
+      loadedSubscribers = true;
+      checkLoading();
     });
 
     const unsubUsers = onValue(ref(database, "users"), (snapshot) => {
@@ -145,12 +202,20 @@ export default function AdminNotificationsPage() {
 
       setUsers(
         data
-          ? Object.entries(data).map(([uid, value]: any) => ({
-              uid,
-              ...value,
-            }))
+          ? Object.entries(data)
+              .map(([uid, value]) => ({
+                uid,
+                ...(value as Omit<UserProfile, "uid">),
+              }))
+              .sort(
+                (a: UserProfile, b: UserProfile) =>
+                  Number(b.createdAt || 0) - Number(a.createdAt || 0)
+              )
           : []
       );
+
+      loadedUsers = true;
+      checkLoading();
     });
 
     return () => {
@@ -264,16 +329,25 @@ export default function AdminNotificationsPage() {
     return items.sort((a, b) => b.createdAt - a.createdAt);
   }, [orders, reviews, products, subscribers, users]);
 
-  const filteredNotifications =
-    filter === "all"
-      ? notifications
-      : notifications.filter((item) => item.type === filter);
+  const filteredNotifications = useMemo(() => {
+    if (filter === "all") return notifications;
+    return notifications.filter((item) => item.type === filter);
+  }, [filter, notifications]);
+
+  const notificationStats = useMemo(() => {
+    return {
+      all: notifications.length,
+      order: notifications.filter((item) => item.type === "order").length,
+      review: notifications.filter((item) => item.type === "review").length,
+      stock: notifications.filter((item) => item.type === "stock").length,
+      subscriber: notifications.filter((item) => item.type === "subscriber")
+        .length,
+      customer: notifications.filter((item) => item.type === "customer").length,
+    };
+  }, [notifications]);
 
   const markOrderProcessing = async (orderId: string) => {
-    await update(ref(database, `orders/${orderId}`), {
-      status: "processing",
-      updatedAt: Date.now(),
-    });
+    await updateOrderStatusWithStock(orderId, "processing");
   };
 
   const clearLowStockProduct = async (productId: string) => {
@@ -283,7 +357,7 @@ export default function AdminNotificationsPage() {
     });
   };
 
-  const typeIcon = (type: NotificationItem["type"]) => {
+  const typeIcon = (type: NotificationType) => {
     if (type === "order") return ShoppingBag;
     if (type === "review") return Star;
     if (type === "stock") return AlertTriangle;
@@ -291,79 +365,111 @@ export default function AdminNotificationsPage() {
     return Users;
   };
 
-  const typeColor = (priority: NotificationItem["priority"]) => {
-    if (priority === "high") return "bg-red-100 text-red-700";
-    if (priority === "medium") return "bg-yellow-100 text-yellow-700";
-    return "bg-green-100 text-green-700";
+  const priorityClassName = (priority: NotificationItem["priority"]) => {
+    if (priority === "high") return "bg-red-50 text-red-700";
+    if (priority === "medium") return "bg-yellow-50 text-yellow-700";
+    return "bg-green-50 text-green-700";
   };
 
+  const filterCards: {
+    value: NotificationFilter;
+    label: string;
+    count: number;
+    icon: typeof Bell;
+  }[] = [
+    {
+      value: "all",
+      label: "All Alerts",
+      count: notificationStats.all,
+      icon: Bell,
+    },
+    {
+      value: "order",
+      label: "Orders",
+      count: notificationStats.order,
+      icon: ShoppingBag,
+    },
+    {
+      value: "review",
+      label: "Reviews",
+      count: notificationStats.review,
+      icon: MessageSquare,
+    },
+    {
+      value: "stock",
+      label: "Stock",
+      count: notificationStats.stock,
+      icon: Package,
+    },
+    {
+      value: "subscriber",
+      label: "Subscribers",
+      count: notificationStats.subscriber,
+      icon: Mail,
+    },
+    {
+      value: "customer",
+      label: "Customers",
+      count: notificationStats.customer,
+      icon: Users,
+    },
+  ];
+
   return (
-    <div className="space-y-6">
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
+    <main className="space-y-6 bg-[#fafaf7] text-[#263421]">
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-6 shadow-[0_8px_24px_rgba(11,61,46,0.06)] sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-[#172313]">
+            <h1 className="text-3xl font-black text-[#102015] sm:text-4xl">
               Notifications
             </h1>
-            <p className="mt-2 text-gray-600">
-              Realtime alerts for orders, reviews, stock, subscribers and customers.
+            <p className="mt-2 text-sm font-medium text-[#4f5f49]">
+              Realtime alerts for orders, reviews, stock, subscribers and
+              customers.
             </p>
           </div>
 
-          <div className="rounded-2xl bg-[#556B2F]/10 px-5 py-3 font-bold text-[#556B2F]">
+          <div className="rounded-[6px] bg-[#f5f1e8] px-5 py-3 text-sm font-bold text-[#0b3d2e]">
             {notifications.length} Active Alerts
           </div>
         </div>
       </section>
 
-      <section className="grid gap-5 md:grid-cols-5">
-        {[
-          ["all", "All", notifications.length, Bell],
-          [
-            "order",
-            "Orders",
-            notifications.filter((i) => i.type === "order").length,
-            ShoppingBag,
-          ],
-          [
-            "review",
-            "Reviews",
-            notifications.filter((i) => i.type === "review").length,
-            MessageSquare,
-          ],
-          [
-            "stock",
-            "Stock",
-            notifications.filter((i) => i.type === "stock").length,
-            Package,
-          ],
-          [
-            "subscriber",
-            "Subscribers",
-            notifications.filter((i) => i.type === "subscriber").length,
-            Mail,
-          ],
-        ].map(([value, label, count, Icon]: any) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setFilter(value)}
-            className={`rounded-[26px] border p-5 text-left shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl transition ${
-              filter === value
-                ? "border-[#556B2F]/40 bg-[#556B2F]/12"
-                : "border-white/65 bg-white/36"
-            }`}
-          >
-            <Icon className="text-[#556B2F]" size={28} />
-            <p className="mt-4 text-sm text-gray-600">{label}</p>
-            <h2 className="text-3xl font-black text-[#172313]">{count}</h2>
-          </button>
-        ))}
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {filterCards.map((item) => {
+          const Icon = item.icon;
+          const isActive = filter === item.value;
+
+          return (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => setFilter(item.value)}
+              className={`rounded-[6px] border p-5 text-left shadow-[0_8px_24px_rgba(11,61,46,0.06)] transition ${
+                isActive
+                  ? "border-[#0b3d2e]/25 bg-[#f5f1e8]"
+                  : "border-[#0b3d2e]/10 bg-white hover:bg-[#f5f1e8]"
+              }`}
+            >
+              <Icon className="text-[#556B2F]" size={28} />
+              <p className="mt-4 text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+                {item.label}
+              </p>
+              <h2 className="mt-2 text-4xl font-black text-[#102015]">
+                {item.count}
+              </h2>
+            </button>
+          );
+        })}
       </section>
 
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-        {filteredNotifications.length === 0 ? (
-          <div className="py-14 text-center text-gray-600">
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)] sm:p-6">
+        {loading ? (
+          <div className="py-14 text-center font-bold text-[#4f5f49]">
+            Loading notifications...
+          </div>
+        ) : filteredNotifications.length === 0 ? (
+          <div className="py-14 text-center font-bold text-[#4f5f49]">
             <CheckCircle2 className="mx-auto mb-4 text-[#556B2F]" size={44} />
             No active notifications.
           </div>
@@ -372,28 +478,44 @@ export default function AdminNotificationsPage() {
             {filteredNotifications.map((item) => {
               const Icon = typeIcon(item.type);
 
-              const rawId = item.id.replace("order-", "").replace("stock-low-", "").replace("stock-out-", "");
+              const rawId = item.id
+                .replace("order-", "")
+                .replace("stock-low-", "")
+                .replace("stock-out-", "");
 
               return (
                 <div
                   key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] bg-white/35 p-5"
+                  className="flex flex-wrap items-center justify-between gap-4 rounded-[6px] bg-[#f5f1e8] p-5"
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex min-w-0 flex-1 items-start gap-4">
                     <div
-                      className={`flex h-12 w-12 items-center justify-center rounded-2xl ${typeColor(
+                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[6px] ${priorityClassName(
                         item.priority
                       )}`}
                     >
                       <Icon size={22} />
                     </div>
 
-                    <div>
-                      <h3 className="font-bold text-[#172313]">{item.title}</h3>
-                      <p className="mt-1 text-sm text-gray-600">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-black text-[#102015]">
+                          {item.title}
+                        </h3>
+
+                        <span
+                          className={`rounded-[6px] px-3 py-1 text-xs font-bold capitalize ${priorityClassName(
+                            item.priority
+                          )}`}
+                        >
+                          {item.priority}
+                        </span>
+                      </div>
+
+                      <p className="mt-1 text-sm font-medium text-[#263421]">
                         {item.message}
                       </p>
-                      <p className="mt-1 text-xs text-gray-500">
+                      <p className="mt-1 text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
                         {dateText(item.createdAt)}
                       </p>
                     </div>
@@ -402,15 +524,16 @@ export default function AdminNotificationsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href={item.href}
-                      className="rounded-xl bg-[#556B2F] px-4 py-3 text-sm font-bold text-white"
+                      className="rounded-[6px] bg-[#003f2a] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#062A18]"
                     >
                       View
                     </Link>
 
                     {item.type === "order" && (
                       <button
+                        type="button"
                         onClick={() => markOrderProcessing(rawId)}
-                        className="rounded-xl bg-blue-100 px-4 py-3 text-sm font-bold text-blue-700"
+                        className="rounded-[6px] bg-green-50 px-4 py-3 text-sm font-bold text-green-700 transition hover:bg-green-100"
                       >
                         Process
                       </button>
@@ -418,8 +541,10 @@ export default function AdminNotificationsPage() {
 
                     {item.type === "stock" && (
                       <button
+                        type="button"
                         onClick={() => clearLowStockProduct(rawId)}
-                        className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-red-700"
+                        className="flex h-11 w-11 items-center justify-center rounded-[6px] bg-red-50 text-red-700 transition hover:bg-red-100"
+                        aria-label="Clear stock notification"
                       >
                         <Trash2 size={17} />
                       </button>
@@ -431,6 +556,6 @@ export default function AdminNotificationsPage() {
           </div>
         )}
       </section>
-    </div>
+    </main>
   );
 }

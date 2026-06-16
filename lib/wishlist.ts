@@ -1,4 +1,5 @@
 import { products } from "@/data/products";
+import { getFirebaseProducts } from "@/lib/cart";
 
 const WISHLIST_KEY = "zayy_wishlist";
 const OLD_WISHLIST_KEYS = ["wishlist", "zayy-wishlist"];
@@ -53,7 +54,10 @@ export function toggleWishlist(id: number) {
 
   saveWishlist(updated);
 
-  return products.filter((product) => updated.includes(product.id));
+  const firebaseProducts = getFirebaseProducts();
+const allProducts = [...firebaseProducts, ...products];
+
+  return allProducts.filter((product) => updated.includes(product.id));
 }
 
 export function isWishlisted(id: number) {
@@ -66,5 +70,8 @@ export function getWishlistCount() {
 
 export function getWishlistItems() {
   const wishlist = getWishlist();
-  return products.filter((product) => wishlist.includes(product.id));
+  const firebaseProducts = getFirebaseProducts();
+  const allProducts = [...firebaseProducts, ...products];
+
+  return allProducts.filter((product) => wishlist.includes(product.id));
 }

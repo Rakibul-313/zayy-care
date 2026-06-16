@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
-
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import FeatureBar from "@/components/FeatureBar";
@@ -13,84 +11,170 @@ import Footer from "@/components/Footer";
 import FeaturedProducts from "@/components/FeaturedProducts";
 import TestimonialsSection from "@/components/TestimonialsSection";
 import NewsletterSection from "@/components/NewsletterSection";
+import FlashSaleSection from "@/components/FlashSaleSection";
+import { motion } from "framer-motion";
 
 
 export default function Home() {
-  useEffect(() => {
-    const reveals = document.querySelectorAll(".reveal");
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("active");
-          }
-        });
-      },
-      { threshold: 0.15 }
-    );
-
-    reveals.forEach((el) => observer.observe(el));
-
-    return () => observer.disconnect();
-  }, []);
-
   return (
-    <main className="relative min-h-screen overflow-hidden">
-      <div
-        className="fixed inset-0 -z-20 bg-cover bg-center"
-        style={{
-          backgroundImage: "url('/nature-bg.png')",
-        }}
-      />
+    <>
+      <Navbar homePremium />
+        <motion.main
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{
+            type: "spring",
+            stiffness: 80,
+            damping: 20,
+          }}
+          className="min-h-screen bg-[#FAFAF7]"
+        >
+          <div className="space-y-10 pb-10 pt-[110px]">
+            <motion.section
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                type: "spring",
+                stiffness: 80,
+                damping: 20,
+                delay: 0.1,
+              }}
+            >
+              <Hero />
+            </motion.section>
 
-      <div className="fixed inset-0 -z-10 bg-[#f5f1e8]/60 backdrop-blur-[2px]" />
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{
+                type: "spring",
+                stiffness: 80,
+                damping: 20,
+              }}
+            >
+              <FeatureBar />
+            </motion.section>
 
-      <div className="relative z-10">
-        <Navbar homePremium />
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{
+                type: "spring",
+                stiffness: 80,
+                damping: 20,
+              }}
+            >
+              <CategoryCards />
+            </motion.section>
 
-        <div className="pt-[160px] pb-10 space-y-8">
-          <section className="reveal">
-            <Hero />
-          </section>
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{
+                type: "spring",
+                stiffness: 80,
+                damping: 20,
+              }}
+            >
+              <ProductSection />
+            </motion.section>
 
-          <section className="reveal">
-            <FeatureBar />
-          </section>
-
-          <section className="reveal">
-            <CategoryCards />
-          </section>
-
-          <section className="reveal">
-            <ProductSection />
-          </section>
-
-          <section className="reveal">
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{
+                type: "spring",
+                stiffness: 80,
+                damping: 20,
+              }}
+            >
               <FeaturedProducts />
-          </section>
+            </motion.section>
 
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{
+                type: "spring",
+                stiffness: 80,
+                damping: 20,
+              }}
+            >
+              <FlashSaleSection/>
+            </motion.section>
 
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{
+                type: "spring",
+                stiffness: 80,
+                damping: 20,
+              }}
+            >
+              <TestimonialsSection />
+            </motion.section>
 
-          <section className="reveal">
-            <TestimonialsSection />
-          </section>
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{
+                type: "spring",
+                stiffness: 80,
+                damping: 20,
+              }}
+            >
+              <BrandStrip />
+            </motion.section>
 
-          <section className="reveal">
-            <BrandStrip />
-          </section>
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{
+                type: "spring",
+                stiffness: 80,
+                damping: 20,
+              }}
+            >
+              <HomeShowcase />
+            </motion.section>
 
-          <section className="reveal ">
-            <HomeShowcase />
-          </section>
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{
+                type: "spring",
+                stiffness: 80,
+                damping: 20,
+              }}
+            >
+              <NewsletterSection />
+            </motion.section>
 
-          <NewsletterSection />
-
-          <section className="reveal">
-            <Footer />
-          </section>
-        </div>
-      </div>
-    </main>
-  );
-}
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.15 }}
+              transition={{
+                type: "spring",
+                stiffness: 80,
+                damping: 20,
+              }}
+            >
+              <Footer />
+            </motion.section>
+          </div>
+        </motion.main>
+      </>
+     
+    );
+  }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { onValue, ref } from "firebase/database";
@@ -9,12 +9,23 @@ import { auth, database } from "@/firebase/config";
 
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { getCartCount, addToCart, saveFirebaseProducts } from "@/lib/cart";
+import { getWishlistCount, getWishlist, toggleWishlist } from "@/lib/wishlist";
 
-import { ArrowLeft, Package, Truck, Wallet } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  Download,
+  Heart,
+  Headphones,
+  MapPin,
+  Package,
+} from "lucide-react";
 
 type Order = {
   id: string;
   orderNumber?: string;
+  deleted?: boolean;
   customer?: {
     uid?: string;
     email?: string;
@@ -44,9 +55,23 @@ type Order = {
   subtotal?: number;
   shipping?: number;
   discountAmount?: number;
+  couponCode?: string;
   total?: number;
   status?: string;
   createdAt?: number;
+};
+
+type Product = {
+  id: number;
+  firebaseId?: string;
+  name: string;
+  image: string;
+  category: string;
+  price: number;
+  oldPrice: number;
+  stock?: number;
+  deleted?: boolean;
+  active?: boolean;
 };
 
 function money(value?: number) {
@@ -55,8 +80,25 @@ function money(value?: number) {
 
 function dateText(value?: number) {
   if (!value) return "N/A";
-  return new Date(value).toLocaleString();
+
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
+
+function safeImage(src?: string) {
+  if (!src || src.trim() === "") return "/products/p1.png";
+  const image = src.trim();
+  if (image.startsWith("http://") || image.startsWith("https://")) return image;
+  if (image.startsWith("/")) return image;
+  return `/${image}`;
+}
+
+const steps = ["placed", "processing", "shipped", "delivered"];
 
 export default function ProfileOrderDetailsPage() {
   const params = useParams();
@@ -66,7 +108,34 @@ export default function ProfileOrderDetailsPage() {
   const [uid, setUid] = useState("");
   const [email, setEmail] = useState("");
   const [order, setOrder] = useState<Order | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [wishlist, setWishlist] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [cartCount, setCartCount] = useState(0);
+  const [wishlistCount, setWishlistCount] = useState(0);
+
+  useEffect(() => {
+    setCartCount(getCartCount());
+    setWishlistCount(getWishlistCount());
+    setWishlist(getWishlist());
+
+    const updateCounts = () => {
+      setCartCount(getCartCount());
+      setWishlistCount(getWishlistCount());
+      setWishlist(getWishlist());
+    };
+
+    window.addEventListener("cartUpdated", updateCounts);
+    window.addEventListener("wishlistUpdated", updateCounts);
+    window.addEventListener("storage", updateCounts);
+
+    return () => {
+      window.removeEventListener("cartUpdated", updateCounts);
+      window.removeEventListener("wishlistUpdated", updateCounts);
+      window.removeEventListener("storage", updateCounts);
+    };
+  }, []);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -96,235 +165,446 @@ export default function ProfileOrderDetailsPage() {
 
       const loaded: Order = {
         id: orderId,
-        ...data,
+        ...(data as Omit<Order, "id">),
       };
 
       const uidMatch = loaded.customer?.uid === uid;
       const emailMatch =
-        email &&
-        loaded.customer?.email?.toLowerCase() === email.toLowerCase();
+        email && loaded.customer?.email?.toLowerCase() === email.toLowerCase();
 
-      if (!uidMatch && !emailMatch) {
+      if (loaded.deleted === true || (!uidMatch && !emailMatch)) {
         setOrder(null);
-        setLoading(false);
-        return;
+      } else {
+        setOrder(loaded);
       }
 
-      setOrder(loaded);
       setLoading(false);
     });
 
     return () => unsubOrder();
   }, [uid, email, orderId]);
 
+  useEffect(() => {
+    const unsubProducts = onValue(ref(database, "products"), (snapshot) => {
+      const data = snapshot.val();
+
+      if (!data) {
+        setProducts([]);
+        return;
+      }
+
+      const loaded: Product[] = Object.entries(data)
+        .map(([firebaseId, value]: any, index) => ({
+          firebaseId,
+          id: Number(value.id || index + 1),
+          name: value.name || "Unnamed Product",
+          image: safeImage(value.image),
+          category: value.category || "Korean Skincare",
+          price: Number(value.price || 0),
+          oldPrice: Number(value.oldPrice || value.price || 0),
+          stock: Number(value.stock || 0),
+          deleted: value.deleted,
+          active: value.active,
+        }))
+        .filter((p) => p.deleted !== true && p.active !== false)
+        .slice(0, 4);
+
+      setProducts(loaded);
+
+      saveFirebaseProducts(
+        loaded.map((p) => ({
+          id: p.id,
+          firebaseId: p.firebaseId,
+          name: p.name,
+          image: p.image,
+          category: p.category,
+          price: p.price,
+          oldPrice: p.oldPrice,
+          stock: p.stock,
+          quantity: 0,
+        }))
+      );
+    });
+
+    return () => unsubProducts();
+  }, []);
+
+  const activeStep = useMemo(() => {
+    const status = (order?.status || "placed").toLowerCase();
+    const index = steps.indexOf(status);
+    return index === -1 ? 0 : index;
+  }, [order]);
+
+  const handleDownloadInvoice = () => {
+    window.print();
+  };
+
+  const handleWishlist = (id: number) => {
+    toggleWishlist(id);
+    setWishlist(getWishlist());
+    setWishlistCount(getWishlistCount());
+  };
+
+  const handleAddToCart = (id: number) => {
+    addToCart(id);
+    setCartCount(getCartCount());
+  };
+
   if (loading) {
     return (
-      <main className="relative min-h-screen overflow-hidden">
-        <Navbar />
-        <div className="pt-[180px] px-4">
-          <div className="glass glass-premium mx-auto max-w-[700px] rounded-[34px] p-10 text-center">
+      <>
+        <Navbar cartCount={cartCount} wishlistCount={wishlistCount} />
+        <main className="min-h-screen bg-[#fafaf7] px-4 pt-[140px]">
+          <div className="mx-auto max-w-[800px] rounded-[6px] border border-[#0b3d2e]/10 bg-white p-10 text-center text-[#4f5f49]">
             Loading order details...
           </div>
-        </div>
-      </main>
+        </main>
+      </>
     );
   }
 
   if (!order) {
     return (
-      <main className="relative min-h-screen overflow-hidden">
-        <Navbar />
-        <div className="pt-[180px] px-4">
-          <div className="glass glass-premium mx-auto max-w-[700px] rounded-[34px] p-10 text-center">
-            <h1 className="text-3xl font-bold text-[#142012]">
+      <>
+        <Navbar cartCount={cartCount} wishlistCount={wishlistCount} />
+        <main className="min-h-screen bg-[#fafaf7] px-4 pt-[140px]">
+          <div className="mx-auto max-w-[800px] rounded-[6px] border border-[#0b3d2e]/10 bg-white p-10 text-center">
+            <h1 className="text-3xl font-black text-[#102015]">
               Order not found
             </h1>
 
             <Link
               href="/profile/orders"
-              className="mt-6 inline-flex rounded-full bg-[#31571f] px-6 py-3 font-bold text-white"
+              className="mt-6 inline-flex h-11 items-center rounded-[6px] bg-[#0b3d2e] px-6 text-sm font-black uppercase text-white"
             >
               Back to Orders
             </Link>
           </div>
-        </div>
-      </main>
+        </main>
+      </>
     );
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden">
-      <div
-        className="fixed inset-0 -z-20 bg-cover bg-center"
-        style={{ backgroundImage: "url('/nature-bg.png')" }}
-      />
-      <div className="fixed inset-0 -z-10 bg-[#f5f1e8]/70 backdrop-blur-[2px]" />
-      <div className="page-glow" />
+    <>
+      <Navbar cartCount={cartCount} wishlistCount={wishlistCount} />
 
-      <Navbar />
+      <main className="min-h-screen bg-[#fafaf7]">
+        <section className="px-4 pt-[110px] pb-10 sm:px-8 lg:px-14 lg:pt-[125px]">
+          <div className="mx-auto max-w-[1500px] space-y-6">
+            <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-[#4f5f49]">
+              <Link href="/profile/orders">My Orders</Link>
+              <ChevronRight size={15} />
+              <span className="text-[#102015]">
+                Order #{order.orderNumber || order.id.slice(0, 8)}
+              </span>
+            </div>
 
-      <div className="pt-[170px] pb-12 px-4 sm:px-8 lg:px-14">
-        <div className="mx-auto max-w-[1500px] space-y-8">
-          <section className="glass glass-premium rounded-[40px] p-8">
-            <Link
-              href="/profile/orders"
-              className="mb-6 inline-flex items-center gap-2 rounded-full bg-white/40 px-5 py-3 font-bold text-[#31571f]"
-            >
-              <ArrowLeft size={18} />
-              Back to Orders
-            </Link>
-
-            <div className="flex flex-wrap items-end justify-between gap-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#556B2F]">
-                  Order Details
-                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="text-3xl font-black text-[#0b3d2e] sm:text-4xl">
+                    Order #{order.orderNumber || order.id.slice(0, 8)}
+                  </h1>
 
-                <h1 className="mt-2 text-4xl font-black text-[#142012]">
-                  #{order.orderNumber || order.id}
-                </h1>
+                  <span className="rounded-[6px] bg-green-100 px-3 py-1 text-xs font-black capitalize text-green-700">
+                    {order.status || "pending"}
+                  </span>
+                </div>
 
-                <p className="mt-3 text-gray-600">
+                <p className="mt-2 text-sm text-[#4f5f49]">
                   Placed on {dateText(order.createdAt)}
                 </p>
               </div>
 
-              <span className="rounded-full bg-[#31571f] px-6 py-3 font-bold capitalize text-white">
-                {order.status || "pending"}
-              </span>
-            </div>
-          </section>
-
-          <section className="grid gap-5 md:grid-cols-3">
-            <div className="glass glass-premium rounded-[30px] p-7">
-              <Package className="text-[#31571f]" />
-              <h2 className="mt-4 text-xl font-bold text-[#142012]">
-                Items
-              </h2>
-              <p className="mt-2 text-gray-600">
-                {order.items?.length || 0} product(s)
-              </p>
+              <button
+                type="button"
+                onClick={handleDownloadInvoice}
+                className="flex h-11 items-center gap-2 rounded-[6px] border border-[#0b3d2e]/20 bg-white px-5 text-sm font-black text-[#0b3d2e]"
+              >
+                <Download size={16} />
+                Download Invoice
+              </button>
             </div>
 
-            <div className="glass glass-premium rounded-[30px] p-7">
-              <Truck className="text-[#31571f]" />
-              <h2 className="mt-4 text-xl font-bold text-[#142012]">
-                Delivery
-              </h2>
-              <p className="mt-2 text-gray-600">
-                {order.shippingAddress?.city || "N/A"},{" "}
-                {order.shippingAddress?.area || "N/A"}
-              </p>
+            <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-6 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+              <div className="relative grid gap-6 sm:grid-cols-4">
+                {steps.map((step, index) => {
+                  const done = index <= activeStep;
+
+                  return (
+                    <div key={step} className="relative text-center">
+                      <div
+                        className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full ${
+                          done
+                            ? "bg-[#0b3d2e] text-white"
+                            : "bg-[#f5f1e8] text-[#4f5f49]"
+                        }`}
+                      >
+                        <Check size={16} />
+                      </div>
+
+                      <p className="mt-2 text-sm font-black capitalize text-[#102015]">
+                        {step}
+                      </p>
+
+                      <p className="mt-1 text-xs text-[#4f5f49]">
+                        {index === 0
+                          ? dateText(order.createdAt).split(",")[0]
+                          : "Updated"}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="glass glass-premium rounded-[30px] p-7">
-              <Wallet className="text-[#31571f]" />
-              <h2 className="mt-4 text-xl font-bold text-[#142012]">
-                Total
-              </h2>
-              <p className="mt-2 text-2xl font-black text-[#31571f]">
-                {money(order.total)}
-              </p>
-            </div>
-          </section>
+            <div className="grid gap-6 lg:grid-cols-[1.15fr_.85fr]">
+              <section className="space-y-6">
+                <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+                  <h2 className="mb-5 text-xl font-black text-[#102015]">
+                    Order Items
+                  </h2>
 
-          <section className="glass glass-premium rounded-[34px] p-8">
-            <h2 className="text-2xl font-bold text-[#142012]">
-              Ordered Products
-            </h2>
+                  <div className="space-y-4">
+                    {order.items?.map((item, index) => (
+                      <div
+                        key={`${item.id}-${index}`}
+                        className="flex items-center justify-between gap-4 border-b border-[#0b3d2e]/10 pb-4 last:border-b-0"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-16 w-16 items-center justify-center rounded-[6px] bg-[#f5f1e8]">
+                            <img
+                              src={safeImage(item.image)}
+                              alt={item.name || "Product"}
+                              className="h-full w-full object-contain p-2"
+                            />
+                          </div>
 
-            <div className="mt-6 space-y-4">
-              {order.items?.map((item, index) => (
-                <div
-                  key={`${item.id}-${index}`}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-white/35 p-5"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white/50">
-                      <img
-                        src={item.image || "/products/p1.png"}
-                        alt={item.name || "Product"}
-                        className="h-full w-full object-contain p-2"
-                      />
+                          <div>
+                            <h3 className="text-sm font-black text-[#102015]">
+                              {item.name || "Product"}
+                            </h3>
+                            <p className="mt-1 text-xs text-[#4f5f49]">
+                              Qty: {item.quantity || 1}
+                            </p>
+                          </div>
+                        </div>
+
+                        <p className="text-sm font-black text-[#102015]">
+                          {money(
+                            item.itemTotal ||
+                              Number(item.price || 0) *
+                                Number(item.quantity || 1)
+                          )}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 space-y-3 border-t border-[#0b3d2e]/10 pt-5 text-sm">
+                    <PriceRow label="Subtotal" value={money(order.subtotal)} />
+                    <PriceRow
+                      label="Shipping"
+                      value={
+                        Number(order.shipping || 0) === 0
+                          ? "Free"
+                          : money(order.shipping)
+                      }
+                    />
+                    <PriceRow
+                      label={`Discount${
+                        order.couponCode ? ` (${order.couponCode})` : ""
+                      }`}
+                      value={`-${money(order.discountAmount)}`}
+                    />
+
+                    <div className="flex justify-between text-xl font-black text-[#102015]">
+                      <span>Total</span>
+                      <span className="text-[#0b3d2e]">{money(order.total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {products.length > 0 && (
+                  <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+                    <h2 className="mb-5 text-xl font-black text-[#102015]">
+                      You May Also Like
+                    </h2>
+
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {products.map((product) => (
+                        <div
+                          key={product.firebaseId || product.id}
+                          className="relative rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] p-3"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleWishlist(product.id)}
+                            className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#0b3d2e]"
+                          >
+                            <Heart
+                              size={15}
+                              fill={
+                                wishlist.includes(product.id)
+                                  ? "currentColor"
+                                  : "none"
+                              }
+                            />
+                          </button>
+
+                          <Link href={`/product/${product.id}`}>
+                            <div className="flex h-28 items-center justify-center rounded-[6px] bg-[#f5f1e8]">
+                              <img
+                                src={safeImage(product.image)}
+                                alt={product.name}
+                                className="h-full w-full object-contain p-3"
+                              />
+                            </div>
+
+                            <h3 className="mt-3 line-clamp-2 text-sm font-black text-[#102015]">
+                              {product.name}
+                            </h3>
+
+                            <p className="mt-1 text-sm font-black text-[#0b3d2e]">
+                              {money(product.price)}
+                            </p>
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => handleAddToCart(product.id)}
+                            className="mt-3 h-9 w-full rounded-[6px] bg-[#0b3d2e] text-xs font-black uppercase text-white"
+                          >
+                            Add to Cart
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <aside className="space-y-6">
+                <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+                  <h2 className="mb-5 text-xl font-black text-[#102015]">
+                    Shipping Address
+                  </h2>
+
+                  <div className="flex gap-3 text-sm leading-7 text-[#4f5f49]">
+                    <MapPin size={18} className="mt-1 text-[#0b3d2e]" />
+
+                    <div>
+                      <p className="font-black text-[#102015]">
+                        {order.shippingAddress?.fullName || "N/A"}
+                      </p>
+                      <p>{order.shippingAddress?.address}</p>
+                      <p>
+                        {order.shippingAddress?.area},{" "}
+                        {order.shippingAddress?.city}
+                      </p>
+                      <p>Phone: {order.shippingAddress?.phone || "N/A"}</p>
+                    </div>
+                  </div>
+
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      `${order.shippingAddress?.address || ""}, ${
+                        order.shippingAddress?.area || ""
+                      }, ${order.shippingAddress?.city || ""}`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-5 flex h-10 items-center justify-center rounded-[6px] border border-[#0b3d2e]/15 bg-[#fafaf7] text-xs font-black text-[#0b3d2e]"
+                  >
+                    View on Map
+                  </a>
+                </div>
+
+                <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+                  <h2 className="mb-5 text-xl font-black text-[#102015]">
+                    Order Summary
+                  </h2>
+
+                  <div className="space-y-3 text-sm text-[#4f5f49]">
+                    <InfoRow
+                      label="Order Number"
+                      value={`#${order.orderNumber || order.id.slice(0, 8)}`}
+                    />
+                    <InfoRow label="Order Date" value={dateText(order.createdAt)} />
+                    <InfoRow
+                      label="Payment Method"
+                      value={order.payment?.method || "N/A"}
+                    />
+                    <InfoRow
+                      label="Order Status"
+                      value={order.status || "pending"}
+                      badge
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+                  <div className="flex gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e9f6ed] text-[#0b3d2e]">
+                      <Headphones size={18} />
                     </div>
 
                     <div>
-                      <h3 className="font-bold text-[#142012]">
-                        {item.name || "Product"}
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        Qty: {item.quantity || 1}
+                      <h2 className="font-black text-[#102015]">Need Help?</h2>
+                      <p className="mt-1 text-sm leading-6 text-[#4f5f49]">
+                        If you have any questions about your order, please
+                        contact our support team.
                       </p>
                     </div>
                   </div>
 
-                  <p className="font-bold text-[#31571f]">
-                    {money(item.itemTotal || Number(item.price || 0) * Number(item.quantity || 1))}
-                  </p>
+                  <Link
+                    href="/contact"
+                    className="mt-5 flex h-10 items-center justify-center rounded-[6px] border border-[#0b3d2e]/15 bg-[#fafaf7] text-xs font-black text-[#0b3d2e]"
+                  >
+                    Contact Support
+                  </Link>
                 </div>
-              ))}
+              </aside>
             </div>
-          </section>
+          </div>
+        </section>
 
-          <section className="grid gap-6 lg:grid-cols-2">
-            <div className="glass glass-premium rounded-[34px] p-8">
-              <h2 className="text-2xl font-bold text-[#142012]">
-                Shipping Address
-              </h2>
+        <Footer />
+      </main>
+    </>
+  );
+}
 
-              <div className="mt-5 space-y-2 text-gray-700">
-                <p>{order.shippingAddress?.fullName}</p>
-                <p>{order.shippingAddress?.phone}</p>
-                <p>
-                  {order.shippingAddress?.address},{" "}
-                  {order.shippingAddress?.area},{" "}
-                  {order.shippingAddress?.city}
-                </p>
-                {order.shippingAddress?.note && (
-                  <p>Note: {order.shippingAddress.note}</p>
-                )}
-              </div>
-            </div>
+function PriceRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between">
+      <span className="text-[#4f5f49]">{label}</span>
+      <b className="text-[#102015]">{value}</b>
+    </div>
+  );
+}
 
-            <div className="glass glass-premium rounded-[34px] p-8">
-              <h2 className="text-2xl font-bold text-[#142012]">
-                Payment Summary
-              </h2>
-
-              <div className="mt-5 space-y-3 text-gray-700">
-                <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <b>{money(order.subtotal)}</b>
-                </div>
-
-                <div className="flex justify-between">
-                  <span>Shipping</span>
-                  <b>{Number(order.shipping || 0) === 0 ? "Free" : money(order.shipping)}</b>
-                </div>
-
-                <div className="flex justify-between">
-                  <span>Discount</span>
-                  <b>-{money(order.discountAmount)}</b>
-                </div>
-
-                <div className="h-px bg-black/10" />
-
-                <div className="flex justify-between text-xl">
-                  <span>Total</span>
-                  <b className="text-[#31571f]">{money(order.total)}</b>
-                </div>
-
-                <p className="pt-3 text-sm capitalize">
-                  Method: {order.payment?.method || "N/A"} / Status:{" "}
-                  {order.payment?.status || "N/A"}
-                </p>
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      <Footer />
-    </main>
+function InfoRow({
+  label,
+  value,
+  badge = false,
+}: {
+  label: string;
+  value: string;
+  badge?: boolean;
+}) {
+  return (
+    <div className="flex justify-between gap-4">
+      <span>{label}</span>
+      {badge ? (
+        <span className="rounded-[6px] bg-green-100 px-2 py-1 text-[10px] font-black capitalize text-green-700">
+          {value}
+        </span>
+      ) : (
+        <b className="text-right text-[#102015]">{value}</b>
+      )}
+    </div>
   );
 }

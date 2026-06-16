@@ -32,21 +32,11 @@ function safeLogo(logo?: string) {
 
   let path = logo.trim();
 
-  if (path.startsWith("http://") || path.startsWith("https://")) {
-    return path;
-  }
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
 
-  if (path.startsWith("public/")) {
-    path = path.replace("public", "");
-  }
-
-  if (path.startsWith("/public/")) {
-    path = path.replace("/public", "");
-  }
-
-  if (!path.startsWith("/")) {
-    path = `/${path}`;
-  }
+  if (path.startsWith("public/")) path = path.replace("public", "");
+  if (path.startsWith("/public/")) path = path.replace("/public", "");
+  if (!path.startsWith("/")) path = `/${path}`;
 
   return path;
 }
@@ -55,9 +45,7 @@ export default function BrandStrip() {
   const [brands, setBrands] = useState<Brand[]>(fallbackBrands);
 
   useEffect(() => {
-    const brandsRef = ref(database, "brands");
-
-    const unsubscribe = onValue(brandsRef, (snapshot) => {
+    const unsubscribe = onValue(ref(database, "brands"), (snapshot) => {
       const data = snapshot.val();
 
       if (!data) {
@@ -84,36 +72,33 @@ export default function BrandStrip() {
 
   return (
     <section className="px-4 sm:px-8 lg:px-14">
-      <div className="mx-auto w-full max-w-[1820px]">
-        <div className="mb-4 flex items-center justify-center gap-3 text-center">
+      <div className="mx-auto w-full max-w-[1820px] ">
+        <div className="mb-5 flex items-center justify-center gap-3 text-center">
           <span className="text-[#556B2F]">+</span>
-          <h2 className="dream-font text-[30px] leading-none text-[#142012]">
+          <h2 className="dream-font text-[36px] leading-none text-[#142012] sm:text-[48px]">
             Popular Brands
           </h2>
           <span className="text-[#556B2F]">+</span>
         </div>
 
-        <div className="brand-marquee">
-          <div className="brand-marquee-track">
+        <div className="brand-marquee ">
+          <div className="brand-marquee-track ">
             {loopBrands.map((brand, index) => (
               <Link
                 key={`${brand.id}-${index}`}
                 href="/brands"
-                className="brand-track flex h-[86px] min-w-[190px] flex-col items-center justify-center rounded-2xl px-5 shadow-[0_14px_34px_rgba(31,43,20,0.12)] transition hover:-translate-y-1"
+                aria-label={brand.name || "Brand"}
+                className="brand-track flex h-[64px] min-w-[170px] items-center justify-center rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-4 shadow-[0_8px_24px_rgba(11,61,46,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_14px_34px_rgba(11,61,46,0.12)]"
               >
-                <div className="relative h-[34px] w-[132px]">
+                <div className="relative h-[34px] w-[130px] ">
                   <Image
                     src={safeLogo(brand.logo)}
                     alt={brand.name || "Brand"}
                     fill
-                    sizes="132px"
+                    sizes="130px"
                     className="object-contain"
                   />
                 </div>
-
-                <p className="mt-2 text-center text-xs font-bold text-[#142012]">
-                  {brand.name}
-                </p>
               </Link>
             ))}
           </div>

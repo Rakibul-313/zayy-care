@@ -7,6 +7,8 @@ import { database } from "@/firebase/config";
 import { ArrowRight, Leaf, Play, ShoppingBag, Sparkles } from "lucide-react";
 
 type Banner = {
+  deleted?: boolean;
+  approved?: boolean;
   badge: string;
   title: string;
   highlight: string;
@@ -25,6 +27,7 @@ type Order = {
 type Review = {
   rating?: number;
   approved?: boolean;
+  deleted?: boolean;
 };
 
 const fallbackBanners: Banner[] = [
@@ -51,6 +54,12 @@ function safeImage(src?: string) {
   return path;
 }
 
+function isVideo(src?: string) {
+  if (!src) return false;
+  const path = src.toLowerCase();
+  return path.endsWith(".mp4") || path.endsWith(".webm") || path.endsWith(".mov");
+}
+
 function formatCustomerCount(count: number) {
   if (count >= 10000) return "10,000+";
   if (count >= 1000) return `${Math.floor(count / 1000)}K+`;
@@ -59,6 +68,8 @@ function formatCustomerCount(count: number) {
 
 export default function Hero() {
   const [active, setActive] = useState(0);
+  const [previousActive, setPreviousActive] = useState(0);
+  const [isChanging, setIsChanging] = useState(false);
   const [banners, setBanners] = useState<Banner[]>(fallbackBanners);
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -73,8 +84,9 @@ export default function Hero() {
       }
 
       const loaded = Object.values(data)
-        .filter((item: any) => item.enabled !== false)
-        .map((item: any) => ({
+        .map((item) => item as Banner)
+        .filter((item) => item.enabled !== false && item.deleted !== true)
+        .map((item) => ({
           badge: item.badge || "ZAYY Care",
           title: item.title || "Glow Naturally,",
           highlight: item.highlight || "Love Your Skin",
@@ -88,6 +100,7 @@ export default function Hero() {
 
       setBanners(loaded.length > 0 ? loaded : fallbackBanners);
       setActive(0);
+      setPreviousActive(0);
     });
 
     return () => unsubscribe();
@@ -111,15 +124,29 @@ export default function Hero() {
     return () => unsubscribe();
   }, []);
 
+  const changeBanner = (index: number) => {
+    if (index === active || isChanging) return;
+
+    setPreviousActive(active);
+    setIsChanging(true);
+    setActive(index);
+
+    window.setTimeout(() => {
+      setPreviousActive(index);
+      setIsChanging(false);
+    }, 850);
+  };
+
   useEffect(() => {
     if (banners.length <= 1) return;
 
     const timer = setInterval(() => {
-      setActive((prev) => (prev + 1) % banners.length);
+      const next = (active + 1) % banners.length;
+      changeBanner(next);
     }, 5200);
 
     return () => clearInterval(timer);
-  }, [banners.length]);
+  }, [active, banners.length, isChanging]);
 
   const customerCount = useMemo(() => {
     const unique = new Set(
@@ -133,7 +160,10 @@ export default function Hero() {
 
   const averageRating = useMemo(() => {
     const approved = reviews.filter(
-      (review) => review.approved !== false && Number(review.rating) > 0
+      (review) =>
+        review.approved !== false &&
+        review.deleted !== true &&
+        Number(review.rating) > 0
     );
 
     if (approved.length === 0) return "4.8";
@@ -147,106 +177,142 @@ export default function Hero() {
   }, [reviews]);
 
   const banner = banners[active] || fallbackBanners[0];
+  const previousBanner = banners[previousActive] || banner;
+
+  const currentMedia = safeImage(banner.image);
+  const previousMedia = safeImage(previousBanner.image);
+  const heroLink = banner.buttonLink || "/shop";
 
   return (
     <section className="px-4 sm:px-8 lg:px-14">
-      <div className="glass glass-premium relative mx-auto min-h-[650px] w-full max-w-[1820px] overflow-hidden rounded-[42px] border-white/80 shadow-[0_38px_125px_rgba(31,43,20,0.24),inset_0_1px_2px_rgba(255,255,255,0.95)]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_30%,rgba(184,199,154,0.58),transparent_28%),radial-gradient(circle_at_92%_10%,rgba(255,255,255,0.92),transparent_22%),radial-gradient(circle_at_20%_80%,rgba(85,107,47,0.16),transparent_32%),linear-gradient(90deg,rgba(255,250,241,0.92),rgba(255,250,241,0.52)_45%,rgba(255,255,255,0.08))]" />
+      <div className="relative mx-auto aspect-[16/7] w-full max-w-[1820px] overflow-hidden rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+        <Link
+          href={heroLink}
+          aria-label={`Open ${banner.title} ${banner.highlight}`}
+          className="absolute inset-0 z-[4] block sm:hidden"
+        />
 
-        <div className="pointer-events-none absolute inset-0 backdrop-blur-[1px]" />
+        <div className="absolute inset-0">
+          {isVideo(previousMedia) ? (
+            <video
+              key={`previous-${previousMedia}`}
+              autoPlay
+              muted
+              loop
+              playsInline
+              className={`absolute inset-0 h-full w-full object-cover object-center transition-all duration-[850ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                isChanging
+                  ? "scale-[1.04] opacity-0"
+                  : "scale-100 opacity-100"
+              }`}
+            >
+              <source src={previousMedia} />
+            </video>
+          ) : (
+            <img
+              key={`previous-${previousMedia}`}
+              src={previousMedia}
+              alt="ZAYY Care Korean skincare hero"
+              className={`absolute inset-0 h-full w-full object-cover object-center transition-all duration-[850ms] ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                isChanging
+                  ? "scale-[1.04] opacity-0"
+                  : "scale-100 opacity-100"
+              }`}
+            />
+          )}
 
-       
+          {isVideo(currentMedia) ? (
+            <video
+              key={`current-${currentMedia}`}
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="absolute inset-0 h-full w-full object-cover object-center opacity-100 transition-all duration-[850ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
+            >
+              <source src={currentMedia} />
+            </video>
+          ) : (
+            <img
+              key={`current-${currentMedia}`}
+              src={currentMedia}
+              alt="ZAYY Care Korean skincare hero"
+              className="absolute inset-0 h-full w-full object-cover object-center opacity-100 transition-all duration-[850ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
+            />
+          )}
+        </div>
 
-        <div className="relative z-10 grid min-h-[650px] items-center gap-8 px-6 py-10 md:px-12 lg:grid-cols-[0.86fr_1.34fr] lg:px-20 lg:py-14">
-          <div key={`${active}-${banner.title}`} className="slide-left max-w-[720px]">
-            <div className="glass-soft mb-7 inline-flex items-center gap-2 rounded-full px-5 py-2 text-[13px] font-bold uppercase text-[#20351a]">
-              <Sparkles size={16} className="text-[#d59a22]" />
+        <div className="absolute inset-y-0 left-0 w-[40%] bg-[#f5f1e8]/90 max-sm:w-[58%] max-sm:bg-[#f5f1e8]/82" />
+        <div className="absolute inset-y-0 left-[40%] w-[16%] bg-gradient-to-r from-[#f5f1e8]/90 to-transparent max-sm:left-[58%] max-sm:w-[18%] max-sm:from-[#f5f1e8]/82" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#102015]/8 via-transparent to-transparent" />
+
+        <div className="relative z-10 grid h-full grid-cols-[2fr_3fr] items-center px-3 py-2 sm:px-8 sm:py-4 md:px-10 lg:px-16 xl:px-20">
+          <div
+            key={`${active}-${banner.title}`}
+            className="max-w-[560px] animate-[fadeIn_.65s_ease-out]"
+          >
+            <div className="mb-1 inline-flex max-w-[120px] items-center gap-1 rounded-[6px] bg-white px-2 py-1 text-[6px] font-black uppercase leading-tight tracking-wide text-[#0b3d2e] shadow-[0_8px_24px_rgba(11,61,46,0.06)] sm:mb-4 sm:max-w-none sm:gap-1.5 sm:px-4 sm:py-2 sm:text-[11px] lg:text-[12px]">
+              <Sparkles size={9} className="shrink-0 text-[#d59a22] sm:size-[15px]" />
               {banner.badge}
             </div>
 
-            <h1 className="dream-font text-[54px] leading-[0.95] text-[#0d120c] sm:text-[78px] lg:text-[96px] xl:text-[116px]">
+            <h1 className="dream-font text-[20px] leading-[0.92] text-[#102015] sm:text-[48px] lg:text-[70px] xl:text-[92px]">
               {banner.title}
               <br />
-              <span className="text-[#31571f]">{banner.highlight}</span>
+              <span className="text-[#0b3d2e]">{banner.highlight}</span>
             </h1>
 
-            <p className="mt-7 max-w-[560px] text-[18px] leading-8 text-[#263421]">
+            <p className="mt-1 max-w-[190px] text-[8px] font-medium leading-3 text-[#263421] sm:mt-5 sm:max-w-[480px] sm:text-[15px] sm:leading-7 lg:text-[16px]">
               {banner.text}
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-4">
+            <div className="relative z-20 mt-2 flex flex-nowrap items-center gap-1.5 sm:mt-6 sm:flex-wrap sm:gap-3">
               <Link
-                href={banner.buttonLink || "/shop"}
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#31571f] px-9 py-4 text-[17px] font-bold text-white shadow-[0_18px_45px_rgba(49,87,31,0.28)]"
+                href={heroLink}
+                className="inline-flex items-center gap-1 rounded-[6px] bg-[#003f2a] px-2.5 py-1.5 text-[8px] font-black text-white shadow-[0_8px_24px_rgba(11,61,46,0.16)] transition hover:bg-[#062A18] sm:gap-2 sm:px-7 sm:py-4 sm:text-[15px]"
               >
-                <ShoppingBag size={19} />
+                <ShoppingBag size={10} className="sm:size-[18px]" />
                 {banner.buttonText || "Shop Now"}
-                <ArrowRight size={18} />
+                <ArrowRight size={10} className="sm:size-[18px]" />
               </Link>
 
               <Link
                 href="/routine-builder"
-                className="glass-soft inline-flex items-center gap-3 rounded-2xl px-8 py-4 text-[17px] font-bold text-[#20351a]"
+                className="inline-flex items-center gap-1 rounded-[6px] border border-[#0b3d2e]/10 bg-white px-2.5 py-1.5 text-[8px] font-black text-[#0b3d2e] shadow-[0_8px_24px_rgba(11,61,46,0.06)] transition hover:bg-[#f5f1e8] sm:gap-3 sm:px-6 sm:py-4 sm:text-[15px]"
               >
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#31571f]">
-                  <Play size={15} fill="currentColor" />
+                <span className="flex h-4 w-4 items-center justify-center rounded-[4px] bg-[#f5f1e8] text-[#0b3d2e] sm:h-7 sm:w-7 sm:rounded-[6px]">
+                  <Play size={8} fill="currentColor" className="sm:size-[14px]" />
                 </span>
-                Explore Routine
+                Explore
               </Link>
-            </div>
-
-            <div className="mt-9 flex flex-wrap items-center gap-4">
-              <div className="flex -space-x-3">
-                {["A", "R", "N"].map((item) => (
-                  <span
-                    key={item}
-                    className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white bg-[#31571f] text-sm font-bold text-white"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-
-              <div>
-                <p className="font-bold text-[#142012]">
-                  {formatCustomerCount(customerCount || 10000)} Happy Customers
-                </p>
-
-                <p className="text-sm font-semibold text-[#d59a22]">
-                  ★★★★★ <span className="text-[#263421]">{averageRating}</span>
-                </p>
-              </div>
             </div>
           </div>
 
-          <div className="relative flex min-h-[390px] items-end justify-center lg:min-h-[560px]">
-            <div className="glass-soft pointer-events-none absolute bottom-[18%] right-[10%] hidden items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-[#31571f] lg:flex">
+          <div className="relative hidden h-full items-end justify-center lg:flex">
+            <div className="absolute bottom-[24%] right-[8%] flex items-center gap-2 rounded-[6px] bg-white px-4 py-2 text-sm font-black text-[#0b3d2e] shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
               <Leaf size={17} />
               Dermatologically tested
             </div>
-
-            <img
-              key={banner.image}
-              src={safeImage(banner.image)}
-              alt="ZAYY Care Korean skincare products"
-              className="relative z-10 max-h-[590px] w-full max-w-[960px] animate-float rounded-[36px] border border-white/50 object-cover shadow-[0_50px_120px_rgba(31,43,20,0.32)]"
-            />
           </div>
         </div>
 
-        <div className="absolute bottom-7 left-1/2 z-30 flex -translate-x-1/2 gap-2">
-          {banners.map((item, index) => (
-            <button
-              key={`${item.badge}-${index}`}
-              type="button"
-              onClick={() => setActive(index)}
-              className={`h-3 rounded-full border border-white/70 transition-all ${
-                active === index ? "w-10 bg-[#556B2F]" : "w-3 bg-white/75"
-              }`}
-              aria-label={`Go to banner ${index + 1}`}
-            />
-          ))}
-        </div>
+        {banners.length > 1 && (
+          <div className="absolute bottom-1 left-1/2 z-30 flex -translate-x-1/2 gap-1 sm:bottom-5 sm:gap-2">
+            {banners.map((item, index) => (
+              <button
+                key={`${item.badge}-${index}`}
+                type="button"
+                onClick={() => changeBanner(index)}
+                className={`h-1.5 rounded-[6px] border border-white transition-all duration-300 sm:h-3 ${
+                  active === index
+                    ? "w-6 bg-[#0b3d2e] sm:w-10"
+                    : "w-1.5 bg-white sm:w-3"
+                }`}
+                aria-label={`Go to banner ${index + 1}`}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

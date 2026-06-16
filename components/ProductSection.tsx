@@ -7,7 +7,6 @@ import { onValue, ref } from "firebase/database";
 
 import PremiumProductCard from "@/components/ui/PremiumProductCard";
 import { database } from "@/firebase/config";
-import { products as staticProducts } from "@/data/products";
 import { addToCart, saveFirebaseProducts } from "@/lib/cart";
 import { getWishlist, toggleWishlist } from "@/lib/wishlist";
 
@@ -25,6 +24,8 @@ type HomeProduct = {
   reviews: number;
   stock?: number;
   bestSeller?: boolean;
+  deleted?: boolean;
+  active?: boolean;
 };
 
 function safeImage(src?: string) {
@@ -40,54 +41,32 @@ export default function ProductSection() {
   const [loading, setLoading] = useState(true);
 
   const scrollLeft = () => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.scrollBy({
+    containerRef.current?.scrollBy({
       left: -340,
       behavior: "smooth",
     });
   };
 
   const scrollRight = () => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.scrollBy({
+    containerRef.current?.scrollBy({
       left: 340,
       behavior: "smooth",
     });
   };
 
   useEffect(() => {
-    const productsRef = ref(database, "products");
-
-    const unsubscribe = onValue(productsRef, (snapshot) => {
+    const unsubscribe = onValue(ref(database, "products"), (snapshot) => {
       const data = snapshot.val();
 
       if (!data) {
-        const fallbackProducts = staticProducts.slice(0, 6).map((product) => ({
-          id: product.id,
-          name: product.name,
-          brand: product.brand,
-          category: product.category,
-          image: product.image,
-          price: product.price,
-          oldPrice: product.oldPrice,
-          sale: product.sale,
-          rating: product.rating,
-          reviews: product.reviews,
-          stock: product.stock ? 100 : 0,
-          bestSeller: true,
-        }));
-
-        setProducts(fallbackProducts);
+        setProducts([]);
+        saveFirebaseProducts([]);
         setLoading(false);
         return;
       }
 
-      const formatted: HomeProduct[] = Object.entries(data).map(
-        ([firebaseId, value]: any, index) => ({
+      const formatted: HomeProduct[] = Object.entries(data)
+        .map(([firebaseId, value]: any, index) => ({
           firebaseId,
           id: Number(value.id || index + 1),
           name: value.name || "Unnamed Product",
@@ -100,14 +79,20 @@ export default function ProductSection() {
           rating: Number(value.rating || 0),
           reviews: Number(value.reviews || 0),
           stock: Number(value.stock || 0),
-          bestSeller: Boolean(value.bestSeller),
-        })
+          bestSeller: value.bestSeller === true,
+          deleted: value.deleted === true,
+          active: value.active !== false,
+        }))
+        .filter(
+          (product) =>
+            product.deleted !== true &&
+            product.active !== false &&
+            product.stock !== 0
+        );
+
+      const finalProducts = formatted.filter(
+        (product) => product.bestSeller === true
       );
-
-      const bestSellers = formatted.filter((product) => product.bestSeller);
-
-      const finalProducts =
-        bestSellers.length > 0 ? bestSellers : formatted.slice(0, 6);
 
       setProducts(finalProducts);
 
@@ -167,7 +152,7 @@ export default function ProductSection() {
           <div className="flex items-center gap-4">
             <Link
               href="/shop"
-              className="hidden items-center gap-2 text-sm font-bold text-[#31571f] sm:inline-flex"
+              className="hidden items-center gap-2 text-sm font-black text-[#0b3d2e] transition-all duration-300 hover:-translate-y-0.5 hover:text-[#062a18] sm:inline-flex"
             >
               View All Products
               <ArrowRight size={16} />
@@ -178,7 +163,7 @@ export default function ProductSection() {
                 type="button"
                 aria-label="Scroll products left"
                 onClick={scrollLeft}
-                className="glass-soft flex h-11 w-11 items-center justify-center rounded-full text-[#31571f] transition hover:-translate-y-1"
+                className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-[#0b3d2e] text-white shadow-[0_10px_24px_rgba(11,61,46,0.22)] transition-all duration-300 hover:-translate-y-1 hover:bg-[#062a18] hover:shadow-[0_18px_40px_rgba(11,61,46,0.35)]"
               >
                 <ArrowLeft size={18} />
               </button>
@@ -187,7 +172,7 @@ export default function ProductSection() {
                 type="button"
                 aria-label="Scroll products right"
                 onClick={scrollRight}
-                className="glass-soft flex h-11 w-11 items-center justify-center rounded-full text-[#31571f] transition hover:-translate-y-1"
+                className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-[#0b3d2e] text-white shadow-[0_10px_24px_rgba(11,61,46,0.22)] transition-all duration-300 hover:-translate-y-1 hover:bg-[#062a18] hover:shadow-[0_18px_40px_rgba(11,61,46,0.35)]"
               >
                 <ArrowRight size={18} />
               </button>
@@ -197,18 +182,14 @@ export default function ProductSection() {
 
         <div
           ref={containerRef}
-          className="flex w-full gap-5 overflow-x-auto scroll-smooth pb-3 scrollbar-hide"
-          style={{
-            scrollBehavior: "smooth",
-            WebkitOverflowScrolling: "touch",
-          }}
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
         >
           {loading ? (
-            <div className="glass rounded-[30px] p-8 text-[#263421]">
+            <div className="glass rounded-[20px] p-8 text-[#263421]">
               Loading best sellers...
             </div>
           ) : products.length === 0 ? (
-            <div className="glass rounded-[30px] p-8 text-[#263421]">
+            <div className="glass rounded-[20px] p-8 text-[#263421]">
               No best seller products found.
             </div>
           ) : (
@@ -216,7 +197,7 @@ export default function ProductSection() {
               <PremiumProductCard
                 key={product.firebaseId || product.id}
                 product={product as any}
-                className="w-[270px] shrink-0 md:w-[286px]"
+                className="w-full transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(11,61,46,0.18)]"
                 isWishlisted={wishlist.includes(product.id)}
                 onToggleWishlist={handleToggleWishlist}
                 onAddToCart={handleAddToCart}

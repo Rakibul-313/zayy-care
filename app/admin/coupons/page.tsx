@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { onValue, push, ref, remove, set, update } from "firebase/database";
+import { onValue, push, ref, set, update } from "firebase/database";
 import { database } from "@/firebase/config";
 import {
   BadgePercent,
@@ -18,6 +18,8 @@ type CouponType = "percent" | "fixed";
 
 type Coupon = {
   id: string;
+  deleted?: boolean;
+  deletedAt?: number;
   code?: string;
   type?: CouponType;
   value?: number;
@@ -29,6 +31,7 @@ type Coupon = {
   expiresAt?: number | null;
   createdAt?: number;
   updatedAt?: number;
+  firebaseId?: string;
 };
 
 function money(value?: number) {
@@ -42,12 +45,34 @@ function dateInputValue(value?: number | null) {
 
 function dateText(value?: number | null) {
   if (!value) return "No expiry";
-  return new Date(value).toLocaleDateString();
+
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  });
 }
 
 function isExpired(value?: number | null) {
   if (!value) return false;
   return Date.now() > value;
+}
+
+function couponStatus(coupon: Coupon) {
+  if (coupon.active === false) return "OFF";
+  if (isExpired(coupon.expiresAt)) return "EXPIRED";
+  if (coupon.maxUsage && Number(coupon.usageCount || 0) >= coupon.maxUsage) {
+    return "LIMIT REACHED";
+  }
+
+  return "ACTIVE";
+}
+
+function statusClass(status: string) {
+  if (status === "ACTIVE") return "bg-green-100 text-green-700";
+  if (status === "EXPIRED") return "bg-red-100 text-red-700";
+  if (status === "LIMIT REACHED") return "bg-orange-100 text-orange-700";
+  return "bg-gray-100 text-gray-600";
 }
 
 export default function AdminCouponsPage() {
@@ -74,16 +99,23 @@ export default function AdminCouponsPage() {
       }
 
       const formatted = Object.entries(data)
-        .map(([id, item]: any) => ({
-          id,
-          ...item,
-          type: item.type || "percent",
-          value: Number(item.value ?? item.discount ?? 0),
-          usageCount: Number(item.usageCount || 0),
-          maxUsage: Number(item.maxUsage || 0),
-          minOrder: Number(item.minOrder || 0),
-        }))
-        .sort((a: Coupon, b: Coupon) => (b.createdAt || 0) - (a.createdAt || 0));
+        .map(([id, item]) => {
+          const coupon = item as Omit<Coupon, "id">;
+
+          return {
+            id,
+            ...coupon,
+            type: coupon.type || "percent",
+            value: Number(coupon.value ?? coupon.discount ?? 0),
+            usageCount: Number(coupon.usageCount || 0),
+            maxUsage: Number(coupon.maxUsage || 0),
+            minOrder: Number(coupon.minOrder || 0),
+          };
+        })
+        .filter((coupon) => coupon.deleted !== true)
+        .sort(
+          (a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0)
+        );
 
       setCoupons(formatted);
     });
@@ -92,18 +124,36 @@ export default function AdminCouponsPage() {
   }, []);
 
   const filteredCoupons = useMemo(() => {
+    const keyword = search.toLowerCase().trim();
+
+    if (!keyword) return coupons;
+
     return coupons.filter((coupon) =>
-      (coupon.code || "").toLowerCase().includes(search.toLowerCase())
+      (coupon.code || "").toLowerCase().includes(keyword)
     );
   }, [coupons, search]);
 
-  const activeCount = coupons.filter(
-    (coupon) => coupon.active !== false && !isExpired(coupon.expiresAt)
-  ).length;
+  const stats = useMemo(() => {
+    const activeCount = coupons.filter(
+      (coupon) => couponStatus(coupon) === "ACTIVE"
+    ).length;
 
-  const expiredCount = coupons.filter((coupon) =>
-    isExpired(coupon.expiresAt)
-  ).length;
+    const expiredCount = coupons.filter(
+      (coupon) => couponStatus(coupon) === "EXPIRED"
+    ).length;
+
+    const usedCount = coupons.reduce(
+      (sum, item) => sum + Number(item.usageCount || 0),
+      0
+    );
+
+    return {
+      total: coupons.length,
+      active: activeCount,
+      expired: expiredCount,
+      used: usedCount,
+    };
+  }, [coupons]);
 
   const resetForm = () => {
     setCode("");
@@ -170,9 +220,11 @@ export default function AdminCouponsPage() {
       const couponRef = push(ref(database, "coupons"));
 
       await set(couponRef, {
+        firebaseId: couponRef.key,
         ...couponData,
         active: true,
         usageCount: 0,
+        deleted: false,
         createdAt: Date.now(),
       });
 
@@ -194,170 +246,151 @@ export default function AdminCouponsPage() {
     const ok = confirm(`Delete coupon "${coupon.code}"?`);
     if (!ok) return;
 
-    await remove(ref(database, `coupons/${coupon.id}`));
-  };
-
-  const couponStatus = (coupon: Coupon) => {
-    if (coupon.active === false) return "OFF";
-    if (isExpired(coupon.expiresAt)) return "EXPIRED";
-    if (coupon.maxUsage && Number(coupon.usageCount || 0) >= coupon.maxUsage) {
-      return "LIMIT REACHED";
-    }
-    return "ACTIVE";
+    await update(ref(database, `coupons/${coupon.id}`), {
+      deleted: true,
+      active: false,
+      deletedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
   };
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-bold text-[#172313]">Coupons</h1>
-            <p className="mt-2 text-gray-600">
-              Create advanced discount coupons with usage limits and expiry.
-            </p>
-          </div>
-
-          <button
-            onClick={openAddModal}
-            className="flex items-center gap-2 rounded-2xl bg-[#556B2F] px-5 py-3 font-semibold text-white"
-          >
-            <Plus size={18} />
-            Add Coupon
-          </button>
+      <section className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-[#102015]">Coupons</h1>
+          <p className="mt-1 text-sm text-[#4f5f49]">
+            Dashboard › Coupons
+          </p>
         </div>
+
+        <button
+          onClick={openAddModal}
+          className="flex h-11 items-center gap-2 rounded-[6px] bg-[#003f2a] px-5 text-sm font-black text-white"
+        >
+          <Plus size={17} />
+          Add Coupon
+        </button>
       </section>
 
-      <section className="grid gap-5 md:grid-cols-4">
-        <div className="rounded-[26px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <BadgePercent className="text-[#556B2F]" size={30} />
-          <p className="mt-4 text-sm text-gray-600">Total Coupons</p>
-          <h2 className="text-3xl font-black text-[#172313]">
-            {coupons.length}
-          </h2>
-        </div>
-
-        <div className="rounded-[26px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <Power className="text-[#556B2F]" size={30} />
-          <p className="mt-4 text-sm text-gray-600">Active</p>
-          <h2 className="text-3xl font-black text-[#172313]">{activeCount}</h2>
-        </div>
-
-        <div className="rounded-[26px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <CalendarDays className="text-[#556B2F]" size={30} />
-          <p className="mt-4 text-sm text-gray-600">Expired</p>
-          <h2 className="text-3xl font-black text-[#172313]">{expiredCount}</h2>
-        </div>
-
-        <div className="rounded-[26px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <BadgePercent className="text-[#556B2F]" size={30} />
-          <p className="mt-4 text-sm text-gray-600">Used</p>
-          <h2 className="text-3xl font-black text-[#172313]">
-            {coupons.reduce((sum, item) => sum + Number(item.usageCount || 0), 0)}
-          </h2>
-        </div>
+      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Total Coupons" value={stats.total} icon={BadgePercent} />
+        <StatCard title="Active" value={stats.active} icon={Power} />
+        <StatCard title="Expired" value={stats.expired} icon={CalendarDays} danger />
+        <StatCard title="Used" value={stats.used} icon={BadgePercent} />
       </section>
 
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-5 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-        <div className="flex items-center gap-3 rounded-2xl bg-white/45 px-4 py-3">
-          <Search size={20} />
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+        <div className="flex items-center gap-3 rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-4 py-3">
+          <Search size={20} className="text-[#0b3d2e]" />
+
           <input
             type="text"
             placeholder="Search coupon code..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-transparent outline-none"
+            className="w-full bg-transparent text-[#102015] outline-none placeholder:text-[#4f5f49]"
           />
         </div>
       </section>
 
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-bold text-[#4f5f49]">
+            Showing {filteredCoupons.length} of {coupons.length} coupons
+          </p>
+        </div>
+
         {filteredCoupons.length === 0 ? (
           <div className="py-12 text-center">
-            <BadgePercent className="mx-auto text-[#556B2F]" size={48} />
-            <h2 className="mt-4 text-2xl font-bold text-[#172313]">
+            <BadgePercent className="mx-auto text-[#0b3d2e]" size={48} />
+            <h2 className="mt-4 text-2xl font-black text-[#102015]">
               No coupons found
             </h2>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-left">
+            <table className="w-full min-w-[1100px] text-left text-sm">
               <thead>
-                <tr className="border-b border-black/10 text-gray-500">
-                  <th className="py-4">Code</th>
+                <tr className="border-b border-[#0b3d2e]/10 text-xs uppercase text-[#4f5f49]">
+                  <th className="py-3">Code</th>
                   <th>Discount</th>
                   <th>Min Order</th>
                   <th>Usage</th>
                   <th>Expiry</th>
                   <th>Status</th>
                   <th>Created</th>
-                  <th>Actions</th>
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
 
               <tbody>
-                {filteredCoupons.map((coupon) => (
-                  <tr key={coupon.id} className="border-b border-black/5">
-                    <td className="py-5">
-                      <span className="rounded-full bg-[#556B2F]/12 px-4 py-2 font-black text-[#556B2F]">
-                        {coupon.code}
-                      </span>
-                    </td>
+                {filteredCoupons.map((coupon) => {
+                  const status = couponStatus(coupon);
 
-                    <td className="font-bold">
-                      {coupon.type === "fixed"
-                        ? `${money(coupon.value)} OFF`
-                        : `${coupon.value}% OFF`}
-                    </td>
+                  return (
+                    <tr
+                      key={coupon.id}
+                      className="border-b border-[#0b3d2e]/10 text-[#263421]"
+                    >
+                      <td className="py-4">
+                        <span className="rounded-[6px] bg-[#f5f1e8] px-4 py-2 font-black text-[#0b3d2e]">
+                          {coupon.code}
+                        </span>
+                      </td>
 
-                    <td>{coupon.minOrder ? money(coupon.minOrder) : "None"}</td>
+                      <td className="font-black text-[#102015]">
+                        {coupon.type === "fixed"
+                          ? `${money(coupon.value)} OFF`
+                          : `${coupon.value}% OFF`}
+                      </td>
 
-                    <td>
-                      {coupon.usageCount || 0}
-                      {coupon.maxUsage ? ` / ${coupon.maxUsage}` : " / Unlimited"}
-                    </td>
+                      <td>{coupon.minOrder ? money(coupon.minOrder) : "None"}</td>
 
-                    <td>{dateText(coupon.expiresAt)}</td>
+                      <td>
+                        {coupon.usageCount || 0}
+                        {coupon.maxUsage
+                          ? ` / ${coupon.maxUsage}`
+                          : " / Unlimited"}
+                      </td>
 
-                    <td>
-                      <button
-                        onClick={() => toggleCoupon(coupon)}
-                        className={`rounded-full px-4 py-2 text-xs font-bold ${
-                          couponStatus(coupon) === "ACTIVE"
-                            ? "bg-green-100 text-green-700"
-                            : couponStatus(coupon) === "EXPIRED"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {couponStatus(coupon)}
-                      </button>
-                    </td>
+                      <td>{dateText(coupon.expiresAt)}</td>
 
-                    <td>
-                      {coupon.createdAt
-                        ? new Date(coupon.createdAt).toLocaleDateString()
-                        : "N/A"}
-                    </td>
-
-                    <td>
-                      <div className="flex gap-2">
+                      <td>
                         <button
-                          onClick={() => openEditModal(coupon)}
-                          className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-100 text-yellow-700"
+                          onClick={() => toggleCoupon(coupon)}
+                          className={`rounded-[6px] px-3 py-1 text-xs font-black ${statusClass(
+                            status
+                          )}`}
                         >
-                          <Pencil size={17} />
+                          {status}
                         </button>
+                      </td>
 
-                        <button
-                          onClick={() => deleteCoupon(coupon)}
-                          className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-700"
-                        >
-                          <Trash2 size={17} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td>
+                        {coupon.createdAt ? dateText(coupon.createdAt) : "N/A"}
+                      </td>
+
+                      <td>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => openEditModal(coupon)}
+                            className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-yellow-50 text-yellow-700"
+                          >
+                            <Pencil size={15} />
+                          </button>
+
+                          <button
+                            onClick={() => deleteCoupon(coupon)}
+                            className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-red-50 text-red-700"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -366,9 +399,9 @@ export default function AdminCouponsPage() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
-          <div className="w-full max-w-[620px] rounded-[32px] border border-white/60 bg-[#f5f1e8] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.22)]">
+          <div className="w-full max-w-[620px] rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.22)]">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-3xl font-bold text-[#172313]">
+              <h2 className="text-3xl font-black text-[#102015]">
                 {editingCoupon ? "Edit Coupon" : "Add Coupon"}
               </h2>
 
@@ -377,7 +410,7 @@ export default function AdminCouponsPage() {
                   resetForm();
                   setShowModal(false);
                 }}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/60"
+                className="flex h-10 w-10 items-center justify-center rounded-[6px] bg-white text-[#003f2a]"
               >
                 <X size={20} />
               </button>
@@ -388,13 +421,13 @@ export default function AdminCouponsPage() {
                 placeholder="Coupon Code e.g. SAVE10"
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                className="w-full rounded-2xl border border-white/70 bg-white/60 px-5 py-4 uppercase outline-none sm:col-span-2"
+                className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-white px-5 py-4 uppercase outline-none sm:col-span-2"
               />
 
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as CouponType)}
-                className="w-full rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-white px-5 py-4 outline-none"
               >
                 <option value="percent">Percentage Discount</option>
                 <option value="fixed">Fixed Amount</option>
@@ -409,7 +442,7 @@ export default function AdminCouponsPage() {
                 }
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                className="w-full rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-white px-5 py-4 outline-none"
               />
 
               <input
@@ -417,7 +450,7 @@ export default function AdminCouponsPage() {
                 placeholder="Minimum Order Amount"
                 value={minOrder}
                 onChange={(e) => setMinOrder(e.target.value)}
-                className="w-full rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-white px-5 py-4 outline-none"
               />
 
               <input
@@ -425,26 +458,60 @@ export default function AdminCouponsPage() {
                 placeholder="Maximum Usage (0 = unlimited)"
                 value={maxUsage}
                 onChange={(e) => setMaxUsage(e.target.value)}
-                className="w-full rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
+                className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-white px-5 py-4 outline-none"
               />
 
               <input
                 type="date"
                 value={expiresAt}
                 onChange={(e) => setExpiresAt(e.target.value)}
-                className="w-full rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none sm:col-span-2"
+                className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-white px-5 py-4 outline-none sm:col-span-2"
               />
             </div>
 
             <button
               onClick={handleSaveCoupon}
-              className="mt-6 rounded-2xl bg-[#556B2F] px-6 py-4 font-semibold text-white"
+              className="mt-6 rounded-[6px] bg-[#003f2a] px-6 py-4 font-black text-white"
             >
               {editingCoupon ? "Update Coupon" : "Save Coupon"}
             </button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  danger,
+}: {
+  title: string;
+  value: string | number;
+  icon: any;
+  danger?: boolean;
+}) {
+  return (
+    <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm font-bold text-[#4f5f49]">{title}</p>
+          <h2 className="mt-3 text-3xl font-black text-[#102015]">{value}</h2>
+          <p className="mt-2 text-xs font-black text-green-600">
+            Realtime data
+          </p>
+        </div>
+
+        <div
+          className={`flex h-11 w-11 items-center justify-center rounded-full ${
+            danger ? "bg-red-50 text-red-600" : "bg-emerald-50 text-[#0b3d2e]"
+          }`}
+        >
+          <Icon size={20} />
+        </div>
+      </div>
     </div>
   );
 }

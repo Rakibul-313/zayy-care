@@ -13,6 +13,8 @@ export type Product = {
   brand: string;
 };
 
+
+
 export const products: Product[] = [
   {
     id: 1,

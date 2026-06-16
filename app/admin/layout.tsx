@@ -10,6 +10,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth, database } from "@/firebase/config";
 import { isAdminUser } from "@/lib/admin";
 
+
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -25,6 +26,7 @@ import {
   Bell,
   MessageSquare,
   Menu,
+  X,
   ChevronDown,
   BarChart3,
   ShieldCheck,
@@ -44,8 +46,10 @@ const adminLinks = [
   { name: "Reviews", href: "/admin/reviews", icon: Star },
   { name: "Banners", href: "/admin/banners", icon: ImageIcon },
   { name: "Blog", href: "/admin/blog", icon: FileText },
+  { name: "Messages", href: "/admin/messages", icon: MessageSquare },
   { name: "Subscribers", href: "/admin/subscribers", icon: Mail },
   { name: "Notifications", href: "/admin/notifications", icon: Bell },
+  { name: "User Notifications", href: "/admin/user-notifications", icon: Bell },
   { name: "Reports", href: "/admin/reports", icon: BarChart3 },
   { name: "General Settings", href: "/admin/settings/general", icon: Settings },
   { name: "Payment Settings", href: "/admin/settings", icon: Settings },
@@ -53,6 +57,7 @@ const adminLinks = [
 ];
 
 type Order = {
+  deleted?: boolean;
   customer?: { email?: string };
   shippingAddress?: { phone?: string };
   status?: string;
@@ -66,6 +71,17 @@ type AdminProfile = {
   active?: boolean;
 };
 
+type Product = {
+  stock?: number;
+  lowStockLimit?: number;
+  deleted?: boolean;
+};
+
+type Review = {
+  approved?: boolean;
+  deleted?: boolean;
+};
+
 export default function AdminLayout({
   children,
 }: {
@@ -77,6 +93,7 @@ export default function AdminLayout({
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [uid, setUid] = useState("");
   const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [productCount, setProductCount] = useState(0);
@@ -85,6 +102,10 @@ export default function AdminLayout({
   const [subscriberCount, setSubscriberCount] = useState(0);
   const [pendingReviewCount, setPendingReviewCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
@@ -114,7 +135,7 @@ export default function AdminLayout({
       const data = snapshot.val();
 
       if (!data || data.active === false) {
-        router.push("/");
+        router.push("/shop");
         return;
       }
 
@@ -123,7 +144,17 @@ export default function AdminLayout({
 
     const unsubOrders = onValue(ref(database, "orders"), (snapshot) => {
       const data = snapshot.val();
-      setOrders(data ? Object.values(data) : []);
+
+      if (!data) {
+        setOrders([]);
+        return;
+      }
+
+      const activeOrders = Object.values(data).filter(
+        (order: any) => order?.deleted !== true
+      ) as Order[];
+
+      setOrders(activeOrders);
     });
 
     const unsubProducts = onValue(ref(database, "products"), (snapshot) => {
@@ -135,7 +166,9 @@ export default function AdminLayout({
         return;
       }
 
-      const products = Object.values(data) as any[];
+      const products = (Object.values(data) as Product[]).filter(
+        (product) => product.deleted !== true
+      );
 
       setProductCount(products.length);
 
@@ -171,10 +204,12 @@ export default function AdminLayout({
         return;
       }
 
-      const reviews = Object.values(data) as any[];
+      const reviews = Object.values(data) as Review[];
 
       setPendingReviewCount(
-        reviews.filter((review) => review.approved === false).length
+        reviews.filter(
+          (review) => review.approved === false && review.deleted !== true
+        ).length
       );
     });
 
@@ -217,216 +252,250 @@ export default function AdminLayout({
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    router.push("/login");
+  const getBadge = (name: string) => {
+    if (name === "Orders") return orderCount;
+    if (name === "Inventory") return lowStockCount;
+    if (name === "Reviews") return pendingReviewCount;
+    if (name === "Messages") return messageCount;
+    if (name === "Subscribers") return subscriberCount;
+    if (name === "Notifications") return totalAlerts;
+    return 0;
   };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push("/login");
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const SidebarContent = () => (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+        <Link href="/admin" className="flex items-center gap-3">
+          <Image
+            src="/logo.png"
+            alt="ZAYY Care"
+            width={220}
+            height={90}
+            priority
+            className="h-auto w-[150px] brightness-0 invert"
+          />
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(false)}
+          className="flex h-10 w-10 items-center justify-center rounded-[6px] bg-white/10 text-white lg:hidden"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        {adminLinks.map((link) => {
+          const Icon = link.icon;
+          const active = isActive(link.href);
+          const badge = getBadge(link.name);
+
+          return (
+            <Link
+              key={link.name}
+              href={link.href}
+              className={`flex items-center gap-3 rounded-[6px] px-4 py-3 text-sm font-bold transition-all duration-300 ${
+                active
+                  ? "bg-[#f5f1e8] text-[#003f2a]"
+                  : "text-white/80 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <Icon size={19} />
+              <span>{link.name}</span>
+
+              {badge > 0 && (
+                <span
+                  className={`ml-auto rounded-[6px] px-2 py-0.5 text-xs font-black ${
+                    active
+                      ? "bg-[#003f2a] text-white"
+                      : "bg-white/15 text-white"
+                  }`}
+                >
+                  {badge}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="p-4">
+        <div className="rounded-[6px] border border-white/10 bg-white/10 p-4">
+          <p className="text-sm font-black">ZAYY Analytics</p>
+
+          <div className="mt-4 space-y-2 text-xs text-white/85">
+            <div className="flex items-center justify-between">
+              <span>Products</span>
+              <b>{productCount}</b>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span>Orders</span>
+              <b>{orderCount}</b>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span>Customers</span>
+              <b>{customerCount}</b>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span>Revenue</span>
+              <b>৳{revenue.toLocaleString("en-BD")}</b>
+            </div>
+          </div>
+
+          <Link
+            href="/admin/reports"
+            className="mt-4 flex w-full items-center justify-center rounded-[6px] bg-white/10 px-4 py-3 text-sm font-black transition hover:bg-white/20"
+          >
+            View Reports →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 
   if (checkingAccess) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f5f1e8]">
-        <div className="rounded-[28px] bg-white/50 px-10 py-8 text-center shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <h2 className="text-2xl font-bold text-[#172313]">
+      <div className="flex min-h-screen items-center justify-center bg-[#fafaf7]">
+        <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#FCFCFA] px-10 py-8 text-center shadow-[0_8px_24px_rgba(11,61,46,0.08)]">
+          <h2 className="text-2xl font-black text-[#102015]">
             Checking Access...
           </h2>
-          <p className="mt-2 text-gray-600">Verifying admin permissions</p>
+          <p className="mt-2 text-[#4f5f49]">Verifying admin permissions</p>
         </div>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f1e8]">
-      <div
-        className="fixed inset-0 -z-10 bg-cover bg-center"
-        style={{ backgroundImage: "url('/nature-bg.png')" }}
-      />
-      <div className="fixed inset-0 -z-10 bg-[#f5f1e8]/80 backdrop-blur-[3px]" />
-
-      <div className="flex min-h-screen p-3">
-        <aside className="fixed left-3 top-3 bottom-3 z-40 hidden w-[270px] overflow-hidden rounded-[28px] bg-[#26391f]/85 text-white shadow-[0_30px_90px_rgba(31,43,20,0.28)] backdrop-blur-2xl lg:block">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.18),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))]" />
-
-          <div className="relative z-10 flex h-full flex-col">
-            <div className="px-7 pt-7 pb-5">
-              <Link href="/admin" className="flex items-center gap-3">
-                <Image
-                  src="/logo.png"
-                  alt="ZAYY Care"
-                  width={320}
-                  height={180}
-                  priority
-                  className="brightness-0 invert"
-                />
-              </Link>
-            </div>
-
-            <nav className="flex-1 space-y-1 overflow-y-auto px-4 pb-4">
-              {adminLinks.map((link) => {
-                const Icon = link.icon;
-                const active = isActive(link.href);
-
-                const badge =
-                  link.name === "Orders"
-                    ? orderCount
-                    : link.name === "Inventory"
-                    ? lowStockCount
-                    : link.name === "Reviews"
-                    ? pendingReviewCount
-                    : link.name === "Subscribers"
-                    ? subscriberCount
-                    : link.name === "Notifications"
-                    ? totalAlerts
-                    : 0;
-
-                return (
-                  <Link
-                    key={link.name}
-                    href={link.href}
-                    className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-                      active
-                        ? "bg-white/22 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.32)]"
-                        : "text-white/82 hover:bg-white/12 hover:text-white"
-                    }`}
-                  >
-                    <Icon size={19} />
-                    <span>{link.name}</span>
-
-                    {badge > 0 && (
-                      <span className="ml-auto rounded-full bg-white/25 px-2 py-0.5 text-xs">
-                        {badge}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </nav>
-
-            <div className="relative z-10 p-4">
-              <div className="rounded-[24px] border border-white/20 bg-white/12 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]">
-                <p className="text-sm font-bold">📊 ZAYY Analytics</p>
-
-                <div className="mt-4 space-y-2 text-xs text-white/85">
-                  <div className="flex items-center justify-between">
-                    <span>Products</span>
-                    <b>{productCount}</b>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span>Orders</span>
-                    <b>{orderCount}</b>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span>Customers</span>
-                    <b>{customerCount}</b>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span>Revenue</span>
-                    <b>৳{revenue.toLocaleString("en-BD")}</b>
-                  </div>
-                </div>
-
-                <Link
-                  href="/admin/reports"
-                  className="mt-4 flex w-full items-center justify-center rounded-full bg-white/18 px-4 py-3 text-sm font-semibold hover:bg-white/25"
-                >
-                  View Reports →
-                </Link>
-              </div>
-            </div>
-          </div>
+    <main className="min-h-screen bg-[#fafaf7]">
+      <div className="flex min-h-screen">
+        <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-[270px] overflow-hidden bg-[#003f2a] text-white shadow-[0_8px_24px_rgba(11,61,46,0.18)] lg:block">
+          <SidebarContent />
         </aside>
 
-        <section className="min-h-screen w-full lg:pl-[285px]">
-          <header className="sticky top-3 z-30 mx-auto mb-5 flex max-w-[1500px] items-center justify-between gap-4 rounded-[28px] border border-white/60 bg-white/35 px-5 py-4 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-            <div className="flex items-center gap-4">
-              <button className="flex h-11 w-11 items-center justify-center rounded-full bg-white/35 text-[#26391f] lg:hidden">
-                <Menu size={22} />
-              </button>
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <button
+              type="button"
+              aria-label="Close admin menu"
+              onClick={() => setMobileMenuOpen(false)}
+              className="absolute inset-0 bg-black/45"
+            />
 
-              <div>
-                <h1 className="text-xl font-bold text-[#172313]">
-                  {adminLinks.find((link) => isActive(link.href))?.name ||
-                    "Dashboard"}
-                </h1>
+            <aside className="absolute bottom-0 left-0 top-0 w-[285px] overflow-hidden bg-[#003f2a] text-white shadow-[0_8px_24px_rgba(11,61,46,0.18)]">
+              <SidebarContent />
+            </aside>
+          </div>
+        )}
 
-                <p className="text-sm text-[#52614d]">
-                  Welcome back, {adminProfile?.name || "Admin"} 🍃
-                </p>
-              </div>
-            </div>
+        <section className="min-h-screen w-full lg:pl-[270px]">
+          <header className="sticky top-0 z-30 border-b border-[#0b3d2e]/10 bg-[#FCFCFA] px-4 py-4 shadow-[0_8px_24px_rgba(11,61,46,0.08)] sm:px-6">
+            <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="flex h-11 w-11 items-center justify-center rounded-[6px] bg-[#f5f1e8] text-[#003f2a] lg:hidden"
+                >
+                  <Menu size={22} />
+                </button>
 
-            <div className="hidden flex-1 justify-center md:flex">
-              <div className="flex w-full max-w-[520px] items-center gap-3 rounded-2xl border border-white/60 bg-white/45 px-5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-                <input
-                  type="text"
-                  placeholder="Search for orders, customers, products..."
-                  className="w-full bg-transparent text-sm outline-none placeholder:text-gray-500"
-                />
-                <Search size={20} className="text-[#26391f]" />
-              </div>
-            </div>
+                <div>
+                  <h1 className="text-xl font-black text-[#102015]">
+                    {adminLinks.find((link) => isActive(link.href))?.name ||
+                      "Dashboard"}
+                  </h1>
 
-            <div className="flex items-center gap-3">
-              <Link
-                href="/admin/notifications"
-                className="relative hidden h-11 w-11 items-center justify-center rounded-full bg-white/35 text-[#26391f] sm:flex"
-              >
-                <Bell size={20} />
-
-                {totalAlerts > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                    {totalAlerts}
-                  </span>
-                )}
-              </Link>
-
-              <Link
-                href="/admin/contact"
-                className="relative hidden h-11 w-11 items-center justify-center rounded-full bg-white/35 text-[#26391f] sm:flex"
-              >
-                <MessageSquare size={20} />
-
-                {messageCount > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                    {messageCount}
-                  </span>
-                )}
-              </Link>
-
-              <div className="flex items-center gap-3 rounded-2xl bg-white/35 px-3 py-2">
-                <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#26391f] font-bold text-white">
-                  {(adminProfile?.name || adminProfile?.email || "A")
-                    .slice(0, 1)
-                    .toUpperCase()}
-                </div>
-
-                <div className="hidden sm:block">
-                  <p className="text-sm font-bold text-[#172313]">
-                    {adminProfile?.name || "Admin"}
-                  </p>
-
-                  <p className="text-xs capitalize text-gray-600">
-                    {adminProfile?.role || "Protected Admin"}
+                  <p className="text-sm font-semibold text-[#4f5f49]">
+                    Welcome back, {adminProfile?.name || "Admin"}
                   </p>
                 </div>
-
-                <ChevronDown size={18} />
               </div>
 
-              <button
-                onClick={handleLogout}
-                className="hidden h-11 w-11 items-center justify-center rounded-full bg-red-100 text-red-600 sm:flex"
-                title="Logout"
-              >
-                <LogOut size={19} />
-              </button>
+              <div className="hidden flex-1 justify-center md:flex">
+                <div className="flex w-full max-w-[520px] items-center gap-3 rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] px-5 py-3">
+                  <input
+                    type="text"
+                    placeholder="Search for orders, customers, products..."
+                    className="w-full bg-transparent text-sm text-[#102015] outline-none placeholder:text-[#4f5f49]"
+                  />
+                  <Search size={20} className="text-[#003f2a]" />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/admin/notifications"
+                  className="relative hidden h-11 w-11 items-center justify-center rounded-[6px] bg-[#f5f1e8] text-[#003f2a] transition-all duration-300 hover:-translate-y-1 sm:flex"
+                >
+                  <Bell size={20} />
+
+                  {totalAlerts > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-[6px] bg-red-500 text-[10px] font-black text-white">
+                      {totalAlerts}
+                    </span>
+                  )}
+                </Link>
+
+                <Link
+                  href="/admin/messages"
+                  className="relative hidden h-11 w-11 items-center justify-center rounded-[6px] bg-[#f5f1e8] text-[#003f2a] transition-all duration-300 hover:-translate-y-1 sm:flex"
+                >
+                  <MessageSquare size={20} />
+
+                  {messageCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-[6px] bg-red-500 text-[10px] font-black text-white">
+                      {messageCount}
+                    </span>
+                  )}
+                </Link>
+
+                <div className="flex items-center gap-3 rounded-[6px] bg-[#f5f1e8] px-3 py-2">
+                  <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-[6px] bg-[#003f2a] font-black text-white">
+                    {(adminProfile?.name || adminProfile?.email || "A")
+                      .slice(0, 1)
+                      .toUpperCase()}
+                  </div>
+
+                  <div className="hidden sm:block">
+                    <p className="text-sm font-black text-[#102015]">
+                      {adminProfile?.name || "Admin"}
+                    </p>
+
+                    <p className="text-xs capitalize text-[#4f5f49]">
+                      {adminProfile?.role || "Protected Admin"}
+                    </p>
+                  </div>
+
+                  <ChevronDown size={18} className="text-[#003f2a]" />
+                </div>
+
+                <button
+                  onClick={handleLogout}
+                  className="hidden h-11 w-11 items-center justify-center rounded-[6px] bg-red-100 text-red-600 transition-all duration-300 hover:-translate-y-1 sm:flex"
+                  title="Logout"
+                >
+                  <LogOut size={19} />
+                </button>
+              </div>
             </div>
           </header>
-
-          <div className="mx-auto max-w-[1500px] pb-10">{children}</div>
+          <div className="mx-auto max-w-[1500px] px-4 py-6 pb-10 sm:px-6">
+            {children}
+          </div>
         </section>
       </div>
     </main>

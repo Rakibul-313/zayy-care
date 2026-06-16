@@ -8,8 +8,8 @@ import {
   Boxes,
   PackageCheck,
   PackageX,
-  Search,
   Save,
+  Search,
 } from "lucide-react";
 
 type Product = {
@@ -24,10 +24,35 @@ type Product = {
   lowStockLimit?: number;
   inStock?: boolean;
   published?: boolean;
+  deleted?: boolean;
+  active?: boolean;
+  deletedAt?: number;
 };
 
 function money(value?: number) {
   return `৳${new Intl.NumberFormat("en-BD").format(Number(value || 0))}`;
+}
+
+function safeImage(src?: string) {
+  if (!src || src.trim() === "") return "/products/p1.png";
+  if (src.startsWith("http://") || src.startsWith("https://")) return src;
+  if (src.startsWith("/")) return src;
+  return `/${src}`;
+}
+
+function stockStatus(product: Product) {
+  const stock = Number(product.stock || 0);
+  const limit = Number(product.lowStockLimit || 5);
+
+  if (stock <= 0) return "Out of Stock";
+  if (stock <= limit) return "Low Stock";
+  return "In Stock";
+}
+
+function statusClass(status: string) {
+  if (status === "In Stock") return "bg-green-100 text-green-700";
+  if (status === "Low Stock") return "bg-yellow-100 text-yellow-700";
+  return "bg-red-100 text-red-700";
 }
 
 export default function AdminInventoryPage() {
@@ -48,16 +73,19 @@ export default function AdminInventoryPage() {
       }
 
       const loaded = Object.entries(data)
-        .map(([firebaseId, value]: any) => ({
-          firebaseId,
-          ...value,
-          stock: Number(value.stock || 0),
-          lowStockLimit: Number(value.lowStockLimit || 5),
-          inStock: value.inStock !== false,
-        }))
-        .sort((a: Product, b: Product) =>
-          (a.name || "").localeCompare(b.name || "")
-        );
+        .map(([firebaseId, value]) => {
+          const product = value as Omit<Product, "firebaseId">;
+
+          return {
+            firebaseId,
+            ...product,
+            stock: Number(product.stock || 0),
+            lowStockLimit: Number(product.lowStockLimit || 5),
+            inStock: product.inStock !== false,
+          };
+        })
+        .filter((product) => product.deleted !== true)
+        .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 
       setProducts(loaded);
 
@@ -77,27 +105,33 @@ export default function AdminInventoryPage() {
   }, []);
 
   const filteredProducts = useMemo(() => {
-    const keyword = search.toLowerCase();
+    const keyword = search.toLowerCase().trim();
+
+    if (!keyword) return products;
 
     return products.filter((product) => {
       const text = `
-        ${product.name}
-        ${product.brand}
-        ${product.category}
+        ${product.name || ""}
+        ${product.brand || ""}
+        ${product.category || ""}
       `.toLowerCase();
 
       return text.includes(keyword);
     });
   }, [products, search]);
 
-  const totalProducts = products.length;
-  const outOfStock = products.filter((p) => Number(p.stock || 0) <= 0).length;
-  const lowStock = products.filter(
-    (p) =>
-      Number(p.stock || 0) > 0 &&
-      Number(p.stock || 0) <= Number(p.lowStockLimit || 5)
-  ).length;
-  const inStock = products.filter((p) => Number(p.stock || 0) > 0).length;
+  const stats = useMemo(() => {
+    const totalProducts = products.length;
+    const outOfStock = products.filter((p) => Number(p.stock || 0) <= 0).length;
+    const lowStock = products.filter(
+      (p) =>
+        Number(p.stock || 0) > 0 &&
+        Number(p.stock || 0) <= Number(p.lowStockLimit || 5)
+    ).length;
+    const inStock = products.filter((p) => Number(p.stock || 0) > 0).length;
+
+    return { totalProducts, inStock, lowStock, outOfStock };
+  }, [products]);
 
   const handleSave = async (product: Product) => {
     const stock = Math.max(0, Number(draftStock[product.firebaseId] || 0));
@@ -123,111 +157,97 @@ export default function AdminInventoryPage() {
   const togglePublished = async (product: Product) => {
     await update(ref(database, `products/${product.firebaseId}`), {
       published: product.published === false,
+      active: product.published === false,
       updatedAt: Date.now(),
     });
   };
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-        <h1 className="text-4xl font-bold text-[#172313]">Inventory</h1>
-        <p className="mt-2 text-gray-600">
-          Manage product stock, low stock alerts and product visibility.
-        </p>
-      </section>
-
-      <section className="grid gap-5 md:grid-cols-4">
-        <div className="rounded-[26px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <Boxes className="text-[#556B2F]" size={30} />
-          <p className="mt-4 text-sm text-gray-600">Total Products</p>
-          <h2 className="text-3xl font-black text-[#172313]">
-            {totalProducts}
-          </h2>
+      <section className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-[#102015]">Inventory</h1>
+          <p className="mt-1 text-sm text-[#4f5f49]">
+            Dashboard › Products › Inventory
+          </p>
         </div>
 
-        <div className="rounded-[26px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <PackageCheck className="text-green-600" size={30} />
-          <p className="mt-4 text-sm text-gray-600">In Stock</p>
-          <h2 className="text-3xl font-black text-[#172313]">{inStock}</h2>
-        </div>
-
-        <div className="rounded-[26px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <AlertTriangle className="text-yellow-600" size={30} />
-          <p className="mt-4 text-sm text-gray-600">Low Stock</p>
-          <h2 className="text-3xl font-black text-[#172313]">{lowStock}</h2>
-        </div>
-
-        <div className="rounded-[26px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <PackageX className="text-red-600" size={30} />
-          <p className="mt-4 text-sm text-gray-600">Out of Stock</p>
-          <h2 className="text-3xl font-black text-[#172313]">{outOfStock}</h2>
+        <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white px-4 py-3 text-sm font-black text-[#0b3d2e]">
+          Realtime Stock
         </div>
       </section>
 
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-5 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-        <div className="flex items-center gap-3 rounded-2xl bg-white/45 px-4 py-3">
-          <Search size={20} />
+      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Total Products" value={stats.totalProducts} icon={Boxes} />
+        <StatCard title="In Stock" value={stats.inStock} icon={PackageCheck} />
+        <StatCard title="Low Stock" value={stats.lowStock} icon={AlertTriangle} warning />
+        <StatCard title="Out of Stock" value={stats.outOfStock} icon={PackageX} danger />
+      </section>
+
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+        <div className="flex items-center gap-3 rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-4 py-3">
+          <Search size={20} className="text-[#0b3d2e]" />
+
           <input
             type="text"
             placeholder="Search product by name, brand or category..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-transparent outline-none"
+            className="w-full bg-transparent text-[#102015] outline-none placeholder:text-[#4f5f49]"
           />
         </div>
       </section>
 
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-bold text-[#4f5f49]">
+            Showing {filteredProducts.length} of {products.length} products
+          </p>
+        </div>
+
         {filteredProducts.length === 0 ? (
-          <div className="py-12 text-center text-gray-600">
+          <div className="py-12 text-center text-[#4f5f49]">
             No products found.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-left">
+            <table className="w-full min-w-[1100px] text-left text-sm">
               <thead>
-                <tr className="border-b border-black/10 text-gray-500">
-                  <th className="pb-4">Product</th>
-                  <th className="pb-4">Price</th>
-                  <th className="pb-4">Stock</th>
-                  <th className="pb-4">Low Stock Limit</th>
-                  <th className="pb-4">Status</th>
-                  <th className="pb-4">Visibility</th>
-                  <th className="pb-4">Action</th>
+                <tr className="border-b border-[#0b3d2e]/10 text-xs uppercase text-[#4f5f49]">
+                  <th className="py-3">Product</th>
+                  <th>Price</th>
+                  <th>Stock</th>
+                  <th>Low Stock Limit</th>
+                  <th>Status</th>
+                  <th>Visibility</th>
+                  <th className="text-right">Action</th>
                 </tr>
               </thead>
 
               <tbody>
                 {filteredProducts.map((product) => {
-                  const stock = Number(product.stock || 0);
-                  const limit = Number(product.lowStockLimit || 5);
-                  const status =
-                    stock <= 0
-                      ? "Out of Stock"
-                      : stock <= limit
-                      ? "Low Stock"
-                      : "In Stock";
+                  const status = stockStatus(product);
 
                   return (
                     <tr
                       key={product.firebaseId}
-                      className="border-b border-black/5"
+                      className="border-b border-[#0b3d2e]/10 text-[#263421]"
                     >
-                      <td className="py-5">
-                        <div className="flex items-center gap-4">
-                          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white/50">
+                      <td className="py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-[6px] bg-[#f5f1e8]">
                             <img
-                              src={product.image || "/products/p1.png"}
+                              src={safeImage(product.image)}
                               alt={product.name || "Product"}
                               className="h-full w-full object-contain p-2"
                             />
                           </div>
 
                           <div>
-                            <p className="font-bold text-[#172313]">
+                            <p className="line-clamp-1 max-w-[280px] font-black text-[#102015]">
                               {product.name || "Unnamed Product"}
                             </p>
-                            <p className="text-sm text-gray-500">
+                            <p className="mt-1 text-xs font-bold text-[#4f5f49]">
                               {product.brand || "ZAYY Care"} •{" "}
                               {product.category || "Korean Skincare"}
                             </p>
@@ -235,7 +255,7 @@ export default function AdminInventoryPage() {
                         </div>
                       </td>
 
-                      <td className="font-bold text-[#556B2F]">
+                      <td className="font-black text-[#0b3d2e]">
                         {money(product.price)}
                       </td>
 
@@ -250,7 +270,7 @@ export default function AdminInventoryPage() {
                               [product.firebaseId]: e.target.value,
                             }))
                           }
-                          className="w-28 rounded-xl bg-white/60 px-4 py-3 outline-none"
+                          className="h-10 w-28 rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-3 text-sm font-bold text-[#102015] outline-none"
                         />
                       </td>
 
@@ -265,19 +285,15 @@ export default function AdminInventoryPage() {
                               [product.firebaseId]: e.target.value,
                             }))
                           }
-                          className="w-32 rounded-xl bg-white/60 px-4 py-3 outline-none"
+                          className="h-10 w-32 rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-3 text-sm font-bold text-[#102015] outline-none"
                         />
                       </td>
 
                       <td>
                         <span
-                          className={`rounded-full px-4 py-2 text-xs font-bold ${
-                            status === "In Stock"
-                              ? "bg-green-100 text-green-700"
-                              : status === "Low Stock"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
+                          className={`rounded-[6px] px-3 py-1 text-xs font-black ${statusClass(
+                            status
+                          )}`}
                         >
                           {status}
                         </span>
@@ -286,27 +302,27 @@ export default function AdminInventoryPage() {
                       <td>
                         <button
                           onClick={() => togglePublished(product)}
-                          className={`rounded-full px-4 py-2 text-xs font-bold ${
+                          className={`rounded-[6px] px-3 py-1 text-xs font-black ${
                             product.published === false
                               ? "bg-gray-100 text-gray-600"
                               : "bg-green-100 text-green-700"
                           }`}
                         >
-                          {product.published === false
-                            ? "Hidden"
-                            : "Published"}
+                          {product.published === false ? "Hidden" : "Published"}
                         </button>
                       </td>
 
                       <td>
-                        <button
-                          onClick={() => handleSave(product)}
-                          disabled={savingId === product.firebaseId}
-                          className="inline-flex items-center gap-2 rounded-xl bg-[#556B2F] px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
-                        >
-                          <Save size={16} />
-                          {savingId === product.firebaseId ? "Saving" : "Save"}
-                        </button>
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => handleSave(product)}
+                            disabled={savingId === product.firebaseId}
+                            className="inline-flex h-10 items-center gap-2 rounded-[6px] bg-[#0b3d2e] px-4 text-sm font-black text-white disabled:opacity-60"
+                          >
+                            <Save size={16} />
+                            {savingId === product.firebaseId ? "Saving" : "Save"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -316,6 +332,46 @@ export default function AdminInventoryPage() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  danger,
+  warning,
+}: {
+  title: string;
+  value: string | number;
+  icon: any;
+  danger?: boolean;
+  warning?: boolean;
+}) {
+  return (
+    <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm font-bold text-[#4f5f49]">{title}</p>
+          <h2 className="mt-3 text-3xl font-black text-[#102015]">{value}</h2>
+          <p className="mt-2 text-xs font-black text-green-600">
+            Realtime data
+          </p>
+        </div>
+
+        <div
+          className={`flex h-11 w-11 items-center justify-center rounded-full ${
+            danger
+              ? "bg-red-50 text-red-600"
+              : warning
+              ? "bg-yellow-50 text-yellow-600"
+              : "bg-emerald-50 text-[#0b3d2e]"
+          }`}
+        >
+          <Icon size={20} />
+        </div>
+      </div>
     </div>
   );
 }

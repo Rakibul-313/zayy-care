@@ -13,9 +13,13 @@ const REVIEWS_KEY = "zayy_reviews";
 export function getLocalReviews(): LocalReview[] {
   if (typeof window === "undefined") return [];
 
-  const reviews = localStorage.getItem(REVIEWS_KEY);
+  try {
+    const reviews = localStorage.getItem(REVIEWS_KEY);
 
-  return reviews ? JSON.parse(reviews) : [];
+    return reviews ? (JSON.parse(reviews) as LocalReview[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 export function saveLocalReviews(reviews: LocalReview[]) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { onValue, push, ref, remove, set, update } from "firebase/database";
+import { onValue, push, ref, set, update } from "firebase/database";
 import { useRouter } from "next/navigation";
 import {
   Mail,
@@ -23,6 +23,8 @@ type AdminUser = {
   role?: AdminRole;
   active?: boolean;
   createdAt?: number;
+  deleted?: boolean;
+  updatedAt?: number;
 };
 
 type AdminInvite = {
@@ -31,7 +33,16 @@ type AdminInvite = {
   role?: AdminRole;
   active?: boolean;
   createdAt?: number;
+  deleted?: boolean;
+  updatedAt?: number;
+  acceptedAt?: number;
+  acceptedBy?: string;
 };
+
+function dateText(value?: number) {
+  if (!value) return "N/A";
+  return new Date(value).toLocaleDateString();
+}
 
 export default function AdminAccessPage() {
   const router = useRouter();
@@ -41,6 +52,7 @@ export default function AdminAccessPage() {
   const [invites, setInvites] = useState<AdminInvite[]>([]);
 
   const [checking, setChecking] = useState(true);
+  const [loadingData, setLoadingData] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const [email, setEmail] = useState("");
@@ -70,22 +82,36 @@ export default function AdminAccessPage() {
   useEffect(() => {
     if (checking) return;
 
+    let adminsLoaded = false;
+    let invitesLoaded = false;
+
+    const checkLoading = () => {
+      if (adminsLoaded && invitesLoaded) {
+        setLoadingData(false);
+      }
+    };
+
     const unsubAdmins = onValue(ref(database, "admins"), (snapshot) => {
       const data = snapshot.val();
 
       if (!data) {
         setAdmins([]);
+        adminsLoaded = true;
+        checkLoading();
         return;
       }
 
       const loaded = Object.entries(data)
-        .map(([uid, value]: any) => ({
+        .map(([uid, value]) => ({
           uid,
-          ...value,
+          ...(value as Omit<AdminUser, "uid">),
         }))
+        .filter((admin) => admin.deleted !== true)
         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
       setAdmins(loaded);
+      adminsLoaded = true;
+      checkLoading();
     });
 
     const unsubInvites = onValue(ref(database, "adminInvites"), (snapshot) => {
@@ -93,17 +119,22 @@ export default function AdminAccessPage() {
 
       if (!data) {
         setInvites([]);
+        invitesLoaded = true;
+        checkLoading();
         return;
       }
 
       const loaded = Object.entries(data)
-        .map(([id, value]: any) => ({
+        .map(([id, value]) => ({
           id,
-          ...value,
+          ...(value as Omit<AdminInvite, "id">),
         }))
+        .filter((invite) => invite.deleted !== true)
         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
       setInvites(loaded);
+      invitesLoaded = true;
+      checkLoading();
     });
 
     return () => {
@@ -117,6 +148,14 @@ export default function AdminAccessPage() {
       (admin) => admin.role === "super-admin" && admin.active !== false
     );
   }, [admins]);
+
+  const activeAdmins = useMemo(() => {
+    return admins.filter((admin) => admin.active !== false).length;
+  }, [admins]);
+
+  const activeInvites = useMemo(() => {
+    return invites.filter((invite) => invite.active !== false).length;
+  }, [invites]);
 
   const resetForm = () => {
     setEmail("");
@@ -164,9 +203,12 @@ export default function AdminAccessPage() {
 
       alert("Admin invite created successfully.");
       resetForm();
-    } catch (error: any) {
-      console.log(error);
-      alert(error.message || "Failed to create invite.");
+    } catch (error) {
+      console.error(error);
+
+      alert(
+        error instanceof Error ? error.message : "Failed to create invite."
+      );
     } finally {
       setCreating(false);
     }
@@ -230,10 +272,15 @@ export default function AdminAccessPage() {
       return;
     }
 
-    const ok = confirm(`Remove admin access for ${admin.email}?`);
+    const ok = confirm(`Remove admin access for ${admin.email || "Admin"}?`);
     if (!ok) return;
 
-    await remove(ref(database, `admins/${admin.uid}`));
+    await update(ref(database, `admins/${admin.uid}`), {
+      deleted: true,
+      active: false,
+      deletedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
   };
 
   const toggleInvite = async (invite: AdminInvite) => {
@@ -244,105 +291,145 @@ export default function AdminAccessPage() {
   };
 
   const deleteInvite = async (invite: AdminInvite) => {
-    const ok = confirm(`Delete invite for ${invite.email}?`);
+    const ok = confirm(`Delete invite for ${invite.email || "this email"}?`);
     if (!ok) return;
 
-    await remove(ref(database, `adminInvites/${invite.id}`));
+    await update(ref(database, `adminInvites/${invite.id}`), {
+      deleted: true,
+      active: false,
+      deletedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
   };
 
   if (checking) {
     return (
-      <div className="rounded-[30px] border border-white/65 bg-white/36 p-10 text-center shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-        Checking super admin access...
-      </div>
+      <main className="space-y-6 bg-[#fafaf7] text-[#263421]">
+        <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-10 text-center font-bold text-[#4f5f49] shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+          Checking super admin access...
+        </div>
+      </main>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-        <div className="flex items-center gap-3">
-          <ShieldCheck className="text-[#556B2F]" size={32} />
+    <main className="space-y-6 bg-[#fafaf7] text-[#263421]">
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-6 shadow-[0_8px_24px_rgba(11,61,46,0.06)] sm:p-8">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-[6px] bg-[#f5f1e8] text-[#0b3d2e]">
+            <ShieldCheck size={28} />
+          </div>
 
           <div>
-            <h1 className="text-4xl font-bold text-[#172313]">
+            <h1 className="text-3xl font-black text-[#102015] sm:text-4xl">
               Admin Access
             </h1>
 
-            <p className="mt-2 text-gray-600">
+            <p className="mt-2 text-sm font-medium text-[#4f5f49]">
               Invite admins safely without logging out the current super admin.
             </p>
           </div>
         </div>
       </section>
 
-      <section className="grid gap-5 md:grid-cols-3">
-        <div className="rounded-[26px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <UserCog className="text-[#556B2F]" size={30} />
-          <p className="mt-4 text-sm text-gray-600">Total Admins</p>
-          <h2 className="text-3xl font-black text-[#172313]">
+      <section className="grid gap-4 md:grid-cols-4">
+        <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+          <UserCog className="text-[#556B2F]" size={28} />
+          <p className="mt-4 text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+            Total Admins
+          </p>
+          <h2 className="mt-2 text-4xl font-black text-[#102015]">
             {admins.length}
           </h2>
         </div>
 
-        <div className="rounded-[26px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <ShieldCheck className="text-[#556B2F]" size={30} />
-          <p className="mt-4 text-sm text-gray-600">Super Admins</p>
-          <h2 className="text-3xl font-black text-[#172313]">
+        <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+          <ShieldCheck className="text-[#556B2F]" size={28} />
+          <p className="mt-4 text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+            Super Admins
+          </p>
+          <h2 className="mt-2 text-4xl font-black text-[#102015]">
             {activeSuperAdmins.length}
           </h2>
         </div>
 
-        <div className="rounded-[26px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-          <Mail className="text-[#556B2F]" size={30} />
-          <p className="mt-4 text-sm text-gray-600">Active Invites</p>
-          <h2 className="text-3xl font-black text-[#172313]">
-            {invites.filter((invite) => invite.active !== false).length}
+        <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+          <UserCog className="text-[#556B2F]" size={28} />
+          <p className="mt-4 text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+            Active Admins
+          </p>
+          <h2 className="mt-2 text-4xl font-black text-[#102015]">
+            {activeAdmins}
+          </h2>
+        </div>
+
+        <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+          <Mail className="text-[#556B2F]" size={28} />
+          <p className="mt-4 text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+            Active Invites
+          </p>
+          <h2 className="mt-2 text-4xl font-black text-[#102015]">
+            {activeInvites}
           </h2>
         </div>
       </section>
 
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-        <h2 className="mb-5 text-2xl font-bold text-[#172313]">
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)] sm:p-6">
+        <h2 className="mb-5 text-2xl font-black text-[#102015]">
           Create Admin Invite
         </h2>
 
         <div className="grid gap-4 md:grid-cols-[1fr_260px]">
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Admin email address"
-            type="email"
-            className="rounded-2xl bg-white/60 px-5 py-4 outline-none"
-          />
+          <div>
+            <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+              Admin Email
+            </label>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Admin email address"
+              type="email"
+              className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] px-5 py-4 text-sm font-medium text-[#263421] outline-none placeholder:text-[#4f5f49] focus:border-[#0b3d2e]/30"
+            />
+          </div>
 
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as AdminRole)}
-            className="rounded-2xl bg-white/60 px-5 py-4 outline-none"
-          >
-            <option value="admin">Admin</option>
-            <option value="super-admin">Super Admin</option>
-          </select>
+          <div>
+            <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+              Admin Role
+            </label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as AdminRole)}
+              className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] px-5 py-4 text-sm font-bold text-[#263421] outline-none focus:border-[#0b3d2e]/30"
+            >
+              <option value="admin">Admin</option>
+              <option value="super-admin">Super Admin</option>
+            </select>
+          </div>
         </div>
 
         <button
+          type="button"
           onClick={handleCreateInvite}
           disabled={creating}
-          className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#556B2F] px-6 py-4 font-semibold text-white disabled:opacity-60"
+          className="mt-6 inline-flex items-center gap-2 rounded-[6px] bg-[#003f2a] px-6 py-4 text-sm font-bold text-white transition hover:bg-[#062A18] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Plus size={18} />
           {creating ? "Creating..." : "Create Invite"}
         </button>
       </section>
 
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-        <h2 className="mb-5 text-2xl font-bold text-[#172313]">
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)] sm:p-6">
+        <h2 className="mb-5 text-2xl font-black text-[#102015]">
           Admin Users
         </h2>
 
-        {admins.length === 0 ? (
-          <div className="rounded-2xl bg-white/35 p-10 text-center text-gray-600">
+        {loadingData ? (
+          <div className="rounded-[6px] bg-[#f5f1e8] p-10 text-center font-bold text-[#4f5f49]">
+            Loading admin users...
+          </div>
+        ) : admins.length === 0 ? (
+          <div className="rounded-[6px] bg-[#f5f1e8] p-10 text-center font-bold text-[#4f5f49]">
             No admin users found.
           </div>
         ) : (
@@ -350,20 +437,36 @@ export default function AdminAccessPage() {
             {admins.map((admin) => (
               <div
                 key={admin.uid}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] bg-white/35 p-5"
+                className="flex flex-wrap items-center justify-between gap-4 rounded-[6px] bg-[#f5f1e8] p-5"
               >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#556B2F] text-white">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[6px] bg-[#003f2a] text-white">
                     <UserCog size={24} />
                   </div>
 
-                  <div>
-                    <h3 className="font-bold text-[#172313]">
-                      {admin.name || "Admin"}
-                    </h3>
-                    <p className="text-sm text-gray-600">{admin.email}</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      UID: {admin.uid.slice(0, 14)}...
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-black text-[#102015]">
+                        {admin.name || "Admin"}
+                      </h3>
+
+                      <span
+                        className={`rounded-[6px] px-3 py-1 text-xs font-bold ${
+                          admin.role === "super-admin"
+                            ? "bg-yellow-50 text-yellow-700"
+                            : "bg-green-50 text-green-700"
+                        }`}
+                      >
+                        {admin.role === "super-admin" ? "Super Admin" : "Admin"}
+                      </span>
+                    </div>
+
+                    <p className="mt-1 break-all text-sm font-medium text-[#263421]">
+                      {admin.email || "No email"}
+                    </p>
+                    <p className="mt-1 text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+                      UID: {admin.uid.slice(0, 14)}... • Created:{" "}
+                      {dateText(admin.createdAt)}
                     </p>
                   </div>
                 </div>
@@ -374,26 +477,29 @@ export default function AdminAccessPage() {
                     onChange={(e) =>
                       changeRole(admin, e.target.value as AdminRole)
                     }
-                    className="rounded-xl bg-white/70 px-4 py-3 outline-none"
+                    className="rounded-[6px] border border-[#0b3d2e]/10 bg-white px-4 py-3 text-sm font-bold text-[#263421] outline-none"
                   >
                     <option value="admin">Admin</option>
                     <option value="super-admin">Super Admin</option>
                   </select>
 
                   <button
+                    type="button"
                     onClick={() => toggleAdminStatus(admin)}
-                    className={`rounded-xl px-4 py-3 text-xs font-bold ${
+                    className={`rounded-[6px] px-4 py-3 text-xs font-bold ${
                       admin.active === false
-                        ? "bg-red-100 text-red-700"
-                        : "bg-green-100 text-green-700"
+                        ? "bg-red-50 text-red-700"
+                        : "bg-green-50 text-green-700"
                     }`}
                   >
                     {admin.active === false ? "OFF" : "ACTIVE"}
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => deleteAdmin(admin)}
-                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-red-700"
+                    className="flex h-11 w-11 items-center justify-center rounded-[6px] bg-red-50 text-red-700 transition hover:bg-red-100"
+                    aria-label="Delete admin"
                   >
                     <Trash2 size={18} />
                   </button>
@@ -404,13 +510,17 @@ export default function AdminAccessPage() {
         )}
       </section>
 
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-        <h2 className="mb-5 text-2xl font-bold text-[#172313]">
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)] sm:p-6">
+        <h2 className="mb-5 text-2xl font-black text-[#102015]">
           Pending Invites
         </h2>
 
-        {invites.length === 0 ? (
-          <div className="rounded-2xl bg-white/35 p-10 text-center text-gray-600">
+        {loadingData ? (
+          <div className="rounded-[6px] bg-[#f5f1e8] p-10 text-center font-bold text-[#4f5f49]">
+            Loading admin invites...
+          </div>
+        ) : invites.length === 0 ? (
+          <div className="rounded-[6px] bg-[#f5f1e8] p-10 text-center font-bold text-[#4f5f49]">
             No admin invites found.
           </div>
         ) : (
@@ -418,44 +528,57 @@ export default function AdminAccessPage() {
             {invites.map((invite) => (
               <div
                 key={invite.id}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] bg-white/35 p-5"
+                className="flex flex-wrap items-center justify-between gap-4 rounded-[6px] bg-[#f5f1e8] p-5"
               >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#556B2F] text-white">
+                <div className="flex min-w-0 items-center gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[6px] bg-[#003f2a] text-white">
                     <UserPlus size={24} />
                   </div>
 
-                  <div>
-                    <h3 className="font-bold text-[#172313]">
-                      {invite.email}
-                    </h3>
-                    <p className="text-sm capitalize text-gray-600">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="break-all font-black text-[#102015]">
+                        {invite.email || "No email"}
+                      </h3>
+
+                      <span
+                        className={`rounded-[6px] px-3 py-1 text-xs font-bold ${
+                          invite.role === "super-admin"
+                            ? "bg-yellow-50 text-yellow-700"
+                            : "bg-green-50 text-green-700"
+                        }`}
+                      >
+                        {invite.role === "super-admin" ? "Super Admin" : "Admin"}
+                      </span>
+                    </div>
+
+                    <p className="mt-1 text-sm font-medium capitalize text-[#263421]">
                       Role: {invite.role || "admin"}
                     </p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Created:{" "}
-                      {invite.createdAt
-                        ? new Date(invite.createdAt).toLocaleDateString()
-                        : "N/A"}
+                    <p className="mt-1 text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+                      Created: {dateText(invite.createdAt)}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   <button
+                    type="button"
                     onClick={() => toggleInvite(invite)}
-                    className={`rounded-xl px-4 py-3 text-xs font-bold ${
+                    className={`rounded-[6px] px-4 py-3 text-xs font-bold ${
                       invite.active === false
-                        ? "bg-red-100 text-red-700"
-                        : "bg-green-100 text-green-700"
+                        ? "bg-red-50 text-red-700"
+                        : "bg-green-50 text-green-700"
                     }`}
                   >
                     {invite.active === false ? "OFF" : "ACTIVE"}
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => deleteInvite(invite)}
-                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-red-700"
+                    className="flex h-11 w-11 items-center justify-center rounded-[6px] bg-red-50 text-red-700 transition hover:bg-red-100"
+                    aria-label="Delete invite"
                   >
                     <Trash2 size={18} />
                   </button>
@@ -465,6 +588,6 @@ export default function AdminAccessPage() {
           </div>
         )}
       </section>
-    </div>
+    </main>
   );
 }

@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "next-themes";
+import localFont from "next/font/local";
 
+export const dreamFont = localFont({
+  src: "../public/fonts/DreamAvenue.woff2",
+  variable: "--font-dream",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -43,8 +48,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "ZAYY Care | Premium Korean Skincare",
-    description:
-      "Shop authentic Korean skincare products in Bangladesh.",
+    description: "Shop authentic Korean skincare products in Bangladesh.",
     images: ["/og-image.png"],
   },
   icons: {
@@ -59,8 +63,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" data-scroll-behavior="smooth">
-      <body>
+    <html lang="en" suppressHydrationWarning>
+      <body className={dreamFont.variable}>
         <ThemeProvider attribute="class" defaultTheme="light">
           {children}
         </ThemeProvider>

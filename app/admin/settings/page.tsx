@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ElementType } from "react";
 import { onValue, ref, set } from "firebase/database";
+import { Building2, CreditCard, Save, Smartphone, Truck } from "lucide-react";
 import { database } from "@/firebase/config";
-import { CreditCard, Save, Smartphone, Truck, Building2 } from "lucide-react";
 
 type PaymentSettings = {
   codEnabled: boolean;
@@ -41,6 +41,8 @@ export default function AdminSettingsPage() {
           ...defaultSettings,
           ...data,
         });
+      } else {
+        setSettings(defaultSettings);
       }
 
       setLoading(false);
@@ -62,11 +64,14 @@ export default function AdminSettingsPage() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      await set(ref(database, "settings/payment"), settings);
+      await set(ref(database, "settings/payment"), {
+        ...settings,
+        updatedAt: Date.now(),
+      });
       alert("Payment settings saved");
     } catch (error) {
-      console.log(error);
-      alert("Failed to save settings");
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -79,39 +84,43 @@ export default function AdminSettingsPage() {
     onChange,
   }: {
     label: string;
-    icon: any;
+    icon: ElementType;
     checked: boolean;
     onChange: () => void;
   }) => (
     <button
       type="button"
       onClick={onChange}
-      className={`flex items-center justify-between rounded-[24px] border p-5 transition ${
+      className={`flex items-center justify-between gap-4 rounded-[6px] border p-5 text-left shadow-[0_8px_24px_rgba(11,61,46,0.06)] transition ${
         checked
-          ? "border-[#556B2F]/40 bg-[#556B2F]/12"
-          : "border-white/60 bg-white/35"
+          ? "border-[#0b3d2e]/25 bg-[#f5f1e8]"
+          : "border-[#0b3d2e]/10 bg-white hover:bg-[#f5f1e8]"
       }`}
     >
-      <div className="flex items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/50 text-[#556B2F]">
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[6px] bg-white text-[#0b3d2e]">
           <Icon size={24} />
         </div>
 
-        <div className="text-left">
-          <h3 className="font-bold text-[#172313]">{label}</h3>
-          <p className="text-sm text-gray-600">
+        <div className="min-w-0">
+          <h3 className="font-black text-[#102015]">{label}</h3>
+          <p
+            className={`mt-1 text-xs font-bold ${
+              checked ? "text-green-700" : "text-red-700"
+            }`}
+          >
             {checked ? "Enabled" : "Disabled"}
           </p>
         </div>
       </div>
 
       <span
-        className={`flex h-8 w-14 items-center rounded-full p-1 transition ${
-          checked ? "bg-[#556B2F]" : "bg-gray-300"
+        className={`flex h-8 w-14 shrink-0 items-center rounded-[6px] p-1 transition ${
+          checked ? "bg-[#003f2a]" : "bg-red-50"
         }`}
       >
         <span
-          className={`h-6 w-6 rounded-full bg-white transition ${
+          className={`h-6 w-6 rounded-[6px] bg-white shadow-sm transition ${
             checked ? "translate-x-6" : "translate-x-0"
           }`}
         />
@@ -120,24 +129,24 @@ export default function AdminSettingsPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-        <h1 className="text-4xl font-bold text-[#172313]">
+    <main className="space-y-6 bg-[#fafaf7] text-[#263421]">
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-6 shadow-[0_8px_24px_rgba(11,61,46,0.06)] sm:p-8">
+        <h1 className="text-3xl font-black text-[#102015] sm:text-4xl">
           Payment Settings
         </h1>
 
-        <p className="mt-2 text-gray-600">
+        <p className="mt-2 text-sm font-medium text-[#4f5f49]">
           Control checkout payment methods from admin panel.
         </p>
       </section>
 
       {loading ? (
-        <section className="rounded-[30px] border border-white/65 bg-white/36 p-10 text-center shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
+        <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-10 text-center font-bold text-[#4f5f49] shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
           Loading settings...
         </section>
       ) : (
         <>
-          <section className="grid gap-5 md:grid-cols-2">
+          <section className="grid gap-4 md:grid-cols-2">
             <Toggle
               label="Cash on Delivery"
               icon={Truck}
@@ -171,42 +180,57 @@ export default function AdminSettingsPage() {
             />
           </section>
 
-          <section className="rounded-[30px] border border-white/65 bg-white/36 p-6 shadow-[0_20px_70px_rgba(31,43,20,0.12)] backdrop-blur-2xl">
-            <h2 className="mb-5 text-2xl font-bold text-[#172313]">
+          <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)] sm:p-6">
+            <h2 className="mb-5 text-2xl font-black text-[#102015]">
               Payment Information
             </h2>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <input
-                type="text"
-                placeholder="bKash Number"
-                value={settings.bkashNumber}
-                onChange={(e) => updateField("bkashNumber", e.target.value)}
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
-              />
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+                  bKash Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="bKash Number"
+                  value={settings.bkashNumber}
+                  onChange={(e) => updateField("bkashNumber", e.target.value)}
+                  className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] px-5 py-4 text-sm font-medium text-[#263421] outline-none placeholder:text-[#4f5f49] focus:border-[#0b3d2e]/30"
+                />
+              </div>
 
-              <input
-                type="text"
-                placeholder="Nagad Number"
-                value={settings.nagadNumber}
-                onChange={(e) => updateField("nagadNumber", e.target.value)}
-                className="rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none"
-              />
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+                  Nagad Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="Nagad Number"
+                  value={settings.nagadNumber}
+                  onChange={(e) => updateField("nagadNumber", e.target.value)}
+                  className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] px-5 py-4 text-sm font-medium text-[#263421] outline-none placeholder:text-[#4f5f49] focus:border-[#0b3d2e]/30"
+                />
+              </div>
 
-              <textarea
-                placeholder="Bank Transfer Information"
-                value={settings.bankInfo}
-                onChange={(e) => updateField("bankInfo", e.target.value)}
-                rows={5}
-                className="resize-none rounded-2xl border border-white/70 bg-white/60 px-5 py-4 outline-none md:col-span-2"
-              />
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#4f5f49]">
+                  Bank Transfer Information
+                </label>
+                <textarea
+                  placeholder="Bank Transfer Information"
+                  value={settings.bankInfo}
+                  onChange={(e) => updateField("bankInfo", e.target.value)}
+                  rows={5}
+                  className="w-full resize-none rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] px-5 py-4 text-sm font-medium text-[#263421] outline-none placeholder:text-[#4f5f49] focus:border-[#0b3d2e]/30"
+                />
+              </div>
             </div>
 
             <button
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="mt-6 flex items-center gap-2 rounded-2xl bg-[#556B2F] px-6 py-4 font-semibold text-white disabled:opacity-60"
+              className="mt-6 flex items-center gap-2 rounded-[6px] bg-[#003f2a] px-6 py-4 text-sm font-bold text-white transition hover:bg-[#062A18] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Save size={18} />
               {saving ? "Saving..." : "Save Settings"}
@@ -214,6 +238,6 @@ export default function AdminSettingsPage() {
           </section>
         </>
       )}
-    </div>
+    </main>
   );
 }

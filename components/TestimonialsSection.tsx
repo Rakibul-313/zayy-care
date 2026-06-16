@@ -41,21 +41,21 @@ export default function TestimonialsSection() {
   return (
     <section className="px-4 sm:px-8 lg:px-14">
       <div className="mx-auto max-w-[1820px]">
-        <h2 className="dream-font mb-6 text-[42px] text-[#142012]">
-          What Our Customers Say
+        <h2 className="dream-font mb-5 text-[38px] text-[#142012] sm:text-[48px]">
+        Our Customers Say <span className="text-[#556B2F]">+</span>
         </h2>
 
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {reviews.map((review, index) => (
             <div
               key={index}
-              className="glass rounded-[28px] p-6 shadow-[0_20px_60px_rgba(85,107,47,0.12)]"
+             className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] p-4 shadow-[0_8px_24px_rgba(11,61,46,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_14px_36px_rgba(11,61,46,0.12)]"
             >
-              <div className="mb-4 flex text-[#d59a22]">
+              <div className="mb-3 flex text-[#d59a22]">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <Star
                     key={star}
-                    size={18}
+                    size={15}
                     fill={
                       star <= Number(review.rating)
                         ? "currentColor"
@@ -65,11 +65,11 @@ export default function TestimonialsSection() {
                 ))}
               </div>
 
-              <p className="mb-5 text-[#263421] leading-7">
-                "{review.comment}"
+              <p className="mb-4 text-[14px] leading-6 text-[#263421]">
+                “{review.comment}”
               </p>
 
-              <p className="font-bold text-[#142012]">
+              <p className="text-[14px] font-bold text-[#142012]">
                 — {review.customerName || "ZAYY Customer"}
               </p>
             </div>
