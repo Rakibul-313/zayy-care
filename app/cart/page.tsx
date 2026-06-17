@@ -182,7 +182,7 @@ export default function CartPage() {
                       >
                         <div className="grid grid-cols-[96px_1fr] gap-4 lg:grid-cols-[120px_1fr]">
                           <Link
-                            href={`/product/${item.id}`}
+                            href={`/product/${(item as any).slug || item.id}`}
                             className="relative flex h-[96px] w-[96px] items-center justify-center overflow-hidden rounded-[6px] bg-[#f5f1e8] lg:h-[105px] lg:w-[120px]"
                           >
                             <Image

@@ -63,6 +63,7 @@ type Order = {
 
 type Product = {
   id: number;
+  slug?: string;
   firebaseId?: string;
   name: string;
   image: string;
@@ -214,6 +215,7 @@ export default function ProfileOrderDetailsPage() {
       saveFirebaseProducts(
         loaded.map((p) => ({
           id: p.id,
+          slug: p.slug,
           firebaseId: p.firebaseId,
           name: p.name,
           image: p.image,
@@ -453,7 +455,7 @@ export default function ProfileOrderDetailsPage() {
                             />
                           </button>
 
-                          <Link href={`/product/${product.id}`}>
+                          <Link href={`/product/${(product as any).slug || product.id}`}>
                             <div className="flex h-28 items-center justify-center rounded-[6px] bg-[#f5f1e8]">
                               <img
                                 src={safeImage(product.image)}

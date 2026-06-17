@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { onValue, ref } from "firebase/database";
@@ -29,9 +30,11 @@ import { toggleWishlist, getWishlistCount, isWishlisted } from "@/lib/wishlist";
 type ShopProduct = {
   id: number;
   firebaseId?: string;
+  slug?: string;
   name: string;
   brand: string;
   category: string;
+  productType?: string;
   image: string;
   price: number;
   oldPrice: number;
@@ -45,6 +48,7 @@ type ShopProduct = {
 };
 
 const taka = new Intl.NumberFormat("en-BD", { maximumFractionDigits: 0 });
+const PRODUCTS_PER_PAGE = 24;
 
 function formatPrice(price?: number) {
   return `৳${taka.format(price || 0)}`;
@@ -75,7 +79,7 @@ function ShopProductCard({
   return (
    <article className="group relative w-full min-w-0 overflow-hidden rounded-[12px] border border-[#e8e3d7] bg-white shadow-[0_10px_28px_rgba(11,61,46,0.09)] transition hover:-translate-y-1 hover:shadow-[0_18px_42px_rgba(11,61,46,0.14)]">
       <Link
-        href={`/product/${product.id}`}
+        href={`/product/${(product as any).slug || product.id}`}
         className="relative flex aspect-[27/23] items-center justify-center overflow-hidden bg-[#f5f1e8]"
       >
         <img
@@ -107,7 +111,7 @@ function ShopProductCard({
         </p>
 
         <Link
-          href={`/product/${product.id}`}
+          href={`/product/${(product as any).slug || product.id}`}
           className="line-clamp-2 min-h-[34px] text-[12px] font-bold leading-snug text-[#102015] hover:text-[#0b3d2e] sm:min-h-[36px] sm:text-[13px]"
         >
           {product.name}
@@ -163,6 +167,7 @@ export default function ShopPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedBrand, setSelectedBrand] = useState("All");
+  const [selectedProductType, setSelectedProductType] = useState("All");
   const [maxPrice, setMaxPrice] = useState(100000);
   const [sortBy, setSortBy] = useState("popular");
   const [cartCount, setCartCount] = useState(0);
@@ -171,6 +176,10 @@ export default function ShopPage() {
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const searchParams = useSearchParams();
+  const searchKeyword =
+    searchParams.get("search")?.trim().toLowerCase() || "";
 
   useEffect(() => {
     setMounted(true);
@@ -204,8 +213,10 @@ export default function ShopPage() {
             firebaseId,
             id: Number(product.id || index + 1),
             name: product.name || "Unnamed Product",
+            slug: (product as any).slug || "",
             brand: product.brand || "ZAYY Care",
             category: product.category || "Korean Skincare",
+            productType: product.productType || "",
             image: safeImage(product.image),
             price: Number(product.price || 0),
             oldPrice: Number(product.oldPrice || product.price || 0),
@@ -228,6 +239,7 @@ export default function ShopPage() {
       saveFirebaseProducts(
         formatted.map((product) => ({
           id: product.id,
+          slug: product.slug,
           firebaseId: product.firebaseId,
           name: product.name,
           image: product.image,
@@ -266,6 +278,18 @@ export default function ShopPage() {
     return Array.from(new Set(products.map((p) => p.brand).filter(Boolean)));
   }, [products]);
 
+ const productTypes = useMemo<string[]>(() => {
+  const unique = Array.from(
+    new Set(
+      products
+        .map((p) => p.productType)
+        .filter((type): type is string => Boolean(type))
+    )
+  );
+
+  return ["All", ...unique];
+}, [products]);
+
   const filteredProducts = useMemo(() => {
     const result = products.filter((product) => {
       const matchCategory =
@@ -276,7 +300,25 @@ export default function ShopPage() {
         selectedBrand === "All" ||
         product.brand.toLowerCase() === selectedBrand.toLowerCase();
 
-      return matchCategory && matchBrand && product.price <= maxPrice;
+      const matchProductType =
+        selectedProductType === "All" ||
+        (product.productType || "").toLowerCase() ===
+          selectedProductType.toLowerCase();
+
+      const matchSearch =
+        searchKeyword === "" ||
+        product.name.toLowerCase().includes(searchKeyword) ||
+        product.brand.toLowerCase().includes(searchKeyword) ||
+        product.category.toLowerCase().includes(searchKeyword) ||
+        (product.productType || "").toLowerCase().includes(searchKeyword);
+
+      return (
+        matchCategory &&
+        matchBrand &&
+        matchProductType &&
+        product.price <= maxPrice &&
+        matchSearch
+      );
     });
 
     if (sortBy === "latest") result.sort((a, b) => b.id - a.id);
@@ -285,11 +327,76 @@ export default function ShopPage() {
     if (sortBy === "popular") result.sort((a, b) => b.reviews - a.reviews);
 
     return result;
-  }, [products, selectedCategory, selectedBrand, maxPrice, sortBy]);
+  }, [
+    products,
+    selectedCategory,
+    selectedBrand,
+    selectedProductType,
+    maxPrice,
+    sortBy,
+    searchKeyword,
+  ]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE)
+  );
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
+    return filteredProducts.slice(startIndex, startIndex + PRODUCTS_PER_PAGE);
+  }, [filteredProducts, currentPage]);
+
+  const visiblePages = useMemo(() => {
+    const pages: number[] = [];
+    const maxVisible = 5;
+
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + maxVisible - 1);
+
+    if (end - start + 1 < maxVisible) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+
+    for (let page = start; page <= end; page++) {
+      pages.push(page);
+    }
+
+    return pages;
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    selectedCategory,
+    selectedBrand,
+    selectedProductType,
+    maxPrice,
+    sortBy,
+    searchKeyword,
+  ]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const goToPage = (page: number) => {
+    const nextPage = Math.min(Math.max(page, 1), totalPages);
+    setCurrentPage(nextPage);
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("shop-products")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   const clearFilters = () => {
     setSelectedCategory("All");
     setSelectedBrand("All");
+    setSelectedProductType("All");
     setMaxPrice(highestPrice);
   };
 
@@ -306,10 +413,10 @@ export default function ShopPage() {
   };
 
   const handleWishlist = (id: number) => {
-    const updated = toggleWishlist(id);
-    setWishlistCount(getWishlistCount());
-    setWishlistIds(updated.map((item) => item.id));
-  };
+  toggleWishlist(id);
+  setWishlistCount(getWishlistCount());
+  setWishlistIds(products.filter((p) => isWishlisted(p.id)).map((p) => p.id));
+};
 
   const mobileFilterDrawer =
     mounted && mobileFilterOpen
@@ -354,6 +461,29 @@ export default function ShopPage() {
                     {cat}
                   </button>
                 ))}
+              </div>
+
+              <div className="mt-6">
+                <h4 className="mb-3 text-sm font-black uppercase text-[#102015]">
+                  Product Type
+                </h4>
+
+                <div className="flex flex-wrap gap-2">
+                  {productTypes.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setSelectedProductType(type)}
+                      className={`rounded-[6px] border px-4 py-2 text-sm font-bold ${
+                        selectedProductType === type
+                          ? "border-[#0b3d2e] bg-[#0b3d2e] text-white"
+                          : "border-[#0b3d2e]/10 bg-[#fafaf7] text-[#263421]"
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="mt-6">
@@ -522,6 +652,34 @@ export default function ShopPage() {
                 <div className="my-6 border-t border-[#0b3d2e]/10" />
 
                 <h4 className="mb-3 text-xs font-black uppercase text-[#102015]">
+                  Product Type
+                </h4>
+
+                <div className="space-y-3">
+                  {productTypes.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setSelectedProductType(type)}
+                      className="flex w-full items-center gap-2 text-sm text-[#263421]"
+                    >
+                      <span
+                        className={`flex h-4 w-4 items-center justify-center rounded-[3px] border ${
+                          selectedProductType === type
+                            ? "border-[#0b3d2e] bg-[#0b3d2e] text-white"
+                            : "border-[#0b3d2e]/20"
+                        }`}
+                      >
+                        {selectedProductType === type && <Check size={12} />}
+                      </span>
+                      {type}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="my-6 border-t border-[#0b3d2e]/10" />
+
+                <h4 className="mb-3 text-xs font-black uppercase text-[#102015]">
                   Brand
                 </h4>
 
@@ -569,13 +727,13 @@ export default function ShopPage() {
               </div>
             </aside>
 
-            <div>
+            <div id="shop-products">
               <div className="mb-5 rounded-[6px] border border-[#0b3d2e]/10 bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <p className="text-sm text-[#4f5f49]">
                     {loading
                       ? "Loading..."
-                      : `${filteredProducts.length} Products`}
+                      : `${filteredProducts.length} Products • Page ${currentPage} of ${totalPages}`}
                   </p>
 
                   <select
@@ -630,17 +788,95 @@ export default function ShopPage() {
                   No products found.
                 </div>
               ) : (
-                <div className="grid grid-cols-[repeat(2,minmax(150px,1fr))] gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
-                  {filteredProducts.map((product) => (
-                    <ShopProductCard
-                      key={product.firebaseId || product.id}
-                      product={product}
-                      liked={wishlistIds.includes(product.id)}
-                      onWishlist={() => handleWishlist(product.id)}
-                      onCart={() => handleAddToCart(product.id)}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div className="grid grid-cols-[repeat(2,minmax(150px,1fr))] gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+                    {paginatedProducts.map((product) => (
+                      <ShopProductCard
+                        key={product.firebaseId || product.id}
+                        product={product}
+                        liked={wishlistIds.includes(product.id)}
+                        onWishlist={() => handleWishlist(product.id)}
+                        onCart={() => handleAddToCart(product.id)}
+                      />
+                    ))}
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="mt-10 flex flex-wrap items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        disabled={currentPage === 1}
+                        onClick={() => goToPage(currentPage - 1)}
+                        className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#d9d5ca] bg-white text-[#263421] transition hover:border-[#0b3d2e] hover:text-[#0b3d2e] disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11"
+                        aria-label="Previous page"
+                      >
+                        ‹
+                      </button>
+
+                      {visiblePages[0] > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => goToPage(1)}
+                            className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#d9d5ca] bg-white text-sm font-bold text-[#263421] transition hover:border-[#0b3d2e] hover:text-[#0b3d2e] sm:h-11 sm:w-11"
+                          >
+                            1
+                          </button>
+
+                          {visiblePages[0] > 2 && (
+                            <span className="px-1 text-sm font-black text-[#6b7568]">
+                              ...
+                            </span>
+                          )}
+                        </>
+                      )}
+
+                      {visiblePages.map((page) => (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => goToPage(page)}
+                          className={`flex h-10 w-10 items-center justify-center rounded-[6px] border text-sm font-bold transition sm:h-11 sm:w-11 ${
+                            currentPage === page
+                              ? "border-[#0b3d2e] bg-[#0b3d2e] text-white"
+                              : "border-[#d9d5ca] bg-white text-[#263421] hover:border-[#0b3d2e] hover:text-[#0b3d2e]"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+
+                      {visiblePages[visiblePages.length - 1] < totalPages && (
+                        <>
+                          {visiblePages[visiblePages.length - 1] <
+                            totalPages - 1 && (
+                            <span className="px-1 text-sm font-black text-[#6b7568]">
+                              ...
+                            </span>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => goToPage(totalPages)}
+                            className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#d9d5ca] bg-white text-sm font-bold text-[#263421] transition hover:border-[#0b3d2e] hover:text-[#0b3d2e] sm:h-11 sm:w-11"
+                          >
+                            {totalPages}
+                          </button>
+                        </>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={currentPage === totalPages}
+                        onClick={() => goToPage(currentPage + 1)}
+                        className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#d9d5ca] bg-white text-[#263421] transition hover:border-[#0b3d2e] hover:text-[#0b3d2e] disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11"
+                        aria-label="Next page"
+                      >
+                        ›
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

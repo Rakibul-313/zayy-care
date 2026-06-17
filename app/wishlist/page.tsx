@@ -78,7 +78,7 @@ function WishlistProductCard({
   return (
     <article className="group relative w-full min-w-0 overflow-hidden rounded-[6px] border border-[#e8e3d7] bg-white shadow-[0_10px_28px_rgba(11,61,46,0.09)] transition hover:-translate-y-1 hover:shadow-[0_18px_42px_rgba(11,61,46,0.14)]">
       <Link
-        href={`/product/${product.id}`}
+        href={`/product/${(product as any).slug || product.id}`}
         className="relative flex aspect-[27/23] items-center justify-center overflow-hidden bg-[#f5f1e8]"
       >
         <Image
@@ -113,7 +113,7 @@ function WishlistProductCard({
         </p>
 
         <Link
-          href={`/product/${product.id}`}
+          href={`/product/${(product as any).slug || product.id}`}
           className="line-clamp-2 min-h-[34px] text-[12px] font-bold leading-snug text-[#102015] hover:text-[#0b3d2e] sm:min-h-[36px] sm:text-[13px]"
         >
           {product.name}
@@ -177,7 +177,12 @@ export default function WishlistPage() {
     const allProducts = [...firebaseProducts, ...localProducts];
 
     const items = wishlist
-      .map((id) => allProducts.find((product) => product.id === id))
+      .map((id) => {
+        return (
+          firebaseProducts.find((product) => product.id === id) ||
+          localProducts.find((product) => product.id === id)
+        );
+      })
       .filter((item): item is WishlistProduct => item !== undefined)
       .filter((item) => item.deleted !== true && item.active !== false);
 

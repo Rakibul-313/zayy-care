@@ -12,6 +12,7 @@ import { getWishlist, toggleWishlist } from "@/lib/wishlist";
 
 type HomeProduct = {
   id: number;
+  slug?: string;
   firebaseId?: string;
   name: string;
   brand: string;
@@ -70,6 +71,7 @@ export default function ProductSection() {
           firebaseId,
           id: Number(value.id || index + 1),
           name: value.name || "Unnamed Product",
+          slug: value.slug || "",
           brand: value.brand || "ZAYY Care",
           category: value.category || "Korean Skincare",
           image: safeImage(value.image),
@@ -99,6 +101,7 @@ export default function ProductSection() {
       saveFirebaseProducts(
         formatted.map((product) => ({
           id: product.id,
+          slug: product.slug,
           firebaseId: product.firebaseId,
           name: product.name,
           image: product.image,
@@ -197,6 +200,7 @@ export default function ProductSection() {
               <PremiumProductCard
                 key={product.firebaseId || product.id}
                 product={product as any}
+                href={`/product/${product.slug || product.id}`}
                 className="w-full transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(11,61,46,0.18)]"
                 isWishlisted={wishlist.includes(product.id)}
                 onToggleWishlist={handleToggleWishlist}

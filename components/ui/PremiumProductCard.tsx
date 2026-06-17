@@ -69,7 +69,7 @@ function getBadgeClass(product: Product) {
 
 export default function PremiumProductCard({
   product,
-  href = `/product/${product.id}`,
+  href = `/product/${(product as any).slug || product.id}`,
   className,
   isWishlisted = false,
   onAddToCart,

@@ -15,6 +15,7 @@ import {
   Package,
   Pencil,
   Plus,
+  Search,
   Star,
   Trash2,
   X,
@@ -34,6 +35,7 @@ type AdminProduct = {
   firebaseId?: string;
   name?: string;
   sku?: string;
+  slug?: string;
   brand?: string;
   brandId?: string;
   price?: number;
@@ -42,6 +44,7 @@ type AdminProduct = {
   stock?: number;
   sold?: number;
   category?: string;
+  productType?: string;
   image?: string;
   imageUrl?: string;
   thumbnail?: string;
@@ -72,6 +75,8 @@ type AdminProduct = {
   createdAt?: number;
   updatedAt?: number;
 };
+
+const PRODUCTS_PER_PAGE = 24;
 
 const productCategories = [
   "Skin Care",
@@ -133,6 +138,14 @@ function safeImage(src?: string) {
   }
 
   return path;
+}
+
+function createSlug(text: string) {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function cleanImages(items: string[]) {
@@ -285,10 +298,14 @@ export default function AdminProductsPage() {
   const [brands, setBrands] = useState<BrandOption[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [search, setSearch] = useState("");
+
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(
     null
   );
+
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [productName, setProductName] = useState("");
   const [brand, setBrand] = useState("");
@@ -296,6 +313,7 @@ export default function AdminProductsPage() {
   const [oldPrice, setOldPrice] = useState("");
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState("");
+  const [productType, setProductType] = useState("");
   const [images, setImages] = useState<string[]>([""]);
   const [stock, setStock] = useState("100");
 
@@ -380,6 +398,25 @@ export default function AdminProductsPage() {
     };
   }, []);
 
+  const filteredProducts = useMemo(() => {
+    const keyword = search.toLowerCase().trim();
+
+    if (!keyword) return products;
+
+    return products.filter((product) => {
+      const text = `
+        ${product.name || ""}
+        ${product.brand || ""}
+        ${product.brandId || ""}
+        ${product.sku || ""}
+        ${product.category || ""}
+        ${product.productType || ""}
+      `.toLowerCase();
+
+      return text.includes(keyword);
+    });
+  }, [products, search]);
+
   const stats = useMemo(() => {
     const total = products.length;
     const published = products.filter(
@@ -400,6 +437,63 @@ export default function AdminProductsPage() {
     return { total, published, drafts, outStock, flashSaleCount, revenue };
   }, [products]);
 
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE)
+  );
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
+    return filteredProducts.slice(startIndex, startIndex + PRODUCTS_PER_PAGE);
+  }, [filteredProducts, currentPage]);
+
+  const visiblePages = useMemo(() => {
+    const pages: number[] = [];
+    const maxVisible = 5;
+
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + maxVisible - 1);
+
+    if (end - start + 1 < maxVisible) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+
+    for (let page = start; page <= end; page++) {
+      pages.push(page);
+    }
+
+    return pages;
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const goToPage = (page: number) => {
+    const nextPage = Math.min(Math.max(page, 1), totalPages);
+    setCurrentPage(nextPage);
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("admin-products-table")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const showingFrom =
+    filteredProducts.length === 0
+      ? 0
+      : (currentPage - 1) * PRODUCTS_PER_PAGE + 1;
+
+  const showingTo = Math.min(
+    currentPage * PRODUCTS_PER_PAGE,
+    filteredProducts.length
+  );
+
   const toggleArrayValue = (
     value: string,
     current: string[],
@@ -419,6 +513,7 @@ export default function AdminProductsPage() {
     setOldPrice("");
     setPrice("");
     setCategory("");
+    setProductType("");
     setImages([""]);
     setStock("100");
     setSkinTypes(["All Skin Types"]);
@@ -452,6 +547,7 @@ export default function AdminProductsPage() {
     setOldPrice(String(product.oldPrice || ""));
     setPrice(String(product.price || ""));
     setCategory(product.category || "");
+    setProductType(product.productType || "");
 
     setImages(
       product.images?.length
@@ -534,12 +630,14 @@ export default function AdminProductsPage() {
 
     const productData = {
       name: productName.trim(),
+      slug: createSlug(productName),
       brand: brand.trim(),
       brandId: brandId.trim(),
       oldPrice: Number(oldPrice),
       price: Number(price),
       discount,
       category,
+      productType: productType.trim(),
       image: mainImage,
       imageUrl: mainImage,
       thumbnail: mainImage,
@@ -600,7 +698,8 @@ export default function AdminProductsPage() {
       alert(error instanceof Error ? error.message : "Failed to save product");
     }
   };
-    const handleDeleteProduct = async (product: AdminProduct) => {
+
+  const handleDeleteProduct = async (product: AdminProduct) => {
     const confirmDelete = confirm(
       `Are you sure you want to delete "${product.name}"?`
     );
@@ -661,7 +760,7 @@ export default function AdminProductsPage() {
         "Sold",
         "Date",
       ],
-      ...products.map((item) => [
+      ...filteredProducts.map((item) => [
         item.name || "",
         item.sku || item.firebaseId || item.id,
         item.brand || "",
@@ -730,9 +829,25 @@ export default function AdminProductsPage() {
       </section>
 
       <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+        <div className="flex items-center gap-3 rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-4 py-3">
+          <Search size={20} className="text-[#0b3d2e]" />
+          <input
+            type="text"
+            placeholder="Search product by name, SKU, brand, category or product type..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-transparent text-[#102015] outline-none placeholder:text-[#4f5f49]"
+          />
+        </div>
+      </section>
+
+      <section
+        id="admin-products-table"
+        className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]"
+      >
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-bold text-[#4f5f49]">
-            Showing 1 to {products.length} of {products.length} products
+            Showing {showingFrom} to {showingTo} of {filteredProducts.length} products
           </p>
 
           <button
@@ -746,7 +861,7 @@ export default function AdminProductsPage() {
 
         {loading ? (
           <p className="py-10 text-center text-[#4f5f49]">Loading products...</p>
-        ) : products.length === 0 ? (
+        ) : filteredProducts.length === 0 ? (
           <div className="py-12 text-center">
             <Package className="mx-auto text-[#003f2a]" size={44} />
             <h2 className="mt-4 text-2xl font-black text-[#102015]">
@@ -754,232 +869,226 @@ export default function AdminProductsPage() {
             </h2>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1380px] text-sm">
-              <thead>
-                <tr className="border-b border-[#0b3d2e]/10 text-left text-xs uppercase text-[#4f5f49]">
-                  <th className="py-3">
-                    <input type="checkbox" className="h-4 w-4 accent-[#0b3d2e]" />
-                  </th>
-                  <th className="py-3">Product</th>
-                  <th>SKU</th>
-                  <th>Category</th>
-                  <th>Price</th>
-                  <th>Stock</th>
-                  <th>Status</th>
-                  <th>Home Flags</th>
-                  <th>Sold</th>
-                  <th>Date</th>
-                  <th className="text-right">Actions</th>
-                </tr>
-              </thead>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1180px] text-sm">
+                <thead>
+                  <tr className="border-b border-[#0b3d2e]/10 text-left text-xs uppercase text-[#4f5f49]">
+                    <th className="py-3">
+                      <input type="checkbox" className="h-4 w-4 accent-[#0b3d2e]" />
+                    </th>
+                    <th className="py-3">Product</th>
+                    <th>SKU</th>
+                    <th>Category</th>
+                    <th>Price</th>
+                    <th>Stock</th>
+                    <th>Status</th>
+                    <th>Sold</th>
+                    <th>Date</th>
+                    <th className="text-right">Actions</th>
+                  </tr>
+                </thead>
 
-              <tbody>
-                {products.map((product) => {
-                  const status = productStatus(product);
+                <tbody>
+                  {paginatedProducts.map((product) => {
+                    const status = productStatus(product);
 
-                  return (
-                    <tr
-                      key={product.id}
-                      className="border-b border-[#0b3d2e]/10 text-[#263421]"
-                    >
-                      <td className="py-4">
-                        <input type="checkbox" className="h-4 w-4 accent-[#0b3d2e]" />
-                      </td>
-
-                      <td className="py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-[6px] bg-[#f5f1e8]">
-                            <img
-                              src={safeImage(product.image)}
-                              alt={product.name || "Product"}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-
-                          <div>
-                            <p className="line-clamp-1 max-w-[260px] font-black text-[#102015]">
-                              {product.name || "Unnamed Product"}
-                            </p>
-
-                            <p className="mt-1 text-xs font-bold text-orange-500">
-                              {product.discount || 0}% OFF
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="font-bold text-[#4f5f49]">
-                        {product.sku || product.firebaseId || product.id.slice(0, 8)}
-                      </td>
-
-                      <td>{product.category || "N/A"}</td>
-
-                      <td>
-                        <p className="font-black text-[#102015]">
-                          {money(product.price)}
-                        </p>
-
-                        {product.flashSale && Number(product.flashSalePrice || 0) > 0 && (
-                          <p className="mt-1 text-xs font-black text-red-600">
-                            Flash: {money(product.flashSalePrice)}
-                          </p>
-                        )}
-                      </td>
-
-                      <td
-                        className={`font-black ${
-                          Number(product.stock || 0) <= 0
-                            ? "text-red-600"
-                            : Number(product.stock || 0) <= 10
-                            ? "text-orange-600"
-                            : "text-green-600"
-                        }`}
+                    return (
+                      <tr
+                        key={product.id}
+                        className="border-b border-[#0b3d2e]/10 text-[#263421]"
                       >
-                        {product.stock || 0}
-                      </td>
+                        <td className="py-4">
+                          <input type="checkbox" className="h-4 w-4 accent-[#0b3d2e]" />
+                        </td>
 
-                      <td>
-                        <span
-                          className={`rounded-[6px] px-3 py-1 text-xs font-black ${statusClass(
-                            status
-                          )}`}
+                        <td className="py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-[6px] bg-[#f5f1e8]">
+                              <img
+                                src={safeImage(product.image)}
+                                alt={product.name || "Product"}
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+
+                            <div>
+                              <p className="line-clamp-1 max-w-[260px] font-black text-[#102015]">
+                                {product.name || "Unnamed Product"}
+                              </p>
+
+                              <p className="mt-1 text-xs font-bold text-orange-500">
+                                {product.discount || 0}% OFF
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="font-bold text-[#4f5f49]">
+                          {product.sku || product.firebaseId || product.id.slice(0, 8)}
+                        </td>
+
+                        <td>{product.category || "N/A"}</td>
+
+                        <td>
+                          <p className="font-black text-[#102015]">
+                            {money(product.price)}
+                          </p>
+
+                          {product.flashSale && Number(product.flashSalePrice || 0) > 0 && (
+                            <p className="mt-1 text-xs font-black text-red-600">
+                              Flash: {money(product.flashSalePrice)}
+                            </p>
+                          )}
+                        </td>
+
+                        <td
+                          className={`font-black ${
+                            Number(product.stock || 0) <= 0
+                              ? "text-red-600"
+                              : Number(product.stock || 0) <= 10
+                              ? "text-orange-600"
+                              : "text-green-600"
+                          }`}
                         >
-                          {status}
-                        </span>
-                      </td>
+                          {product.stock || 0}
+                        </td>
 
-                      <td>
-                        <div className="flex flex-wrap gap-1.5">
+                        <td>
                           <span
-                            className={`rounded-[6px] px-2 py-1 text-[10px] font-black ${
-                              product.featured
-                                ? "bg-green-50 text-green-700"
-                                : "bg-[#f5f1e8] text-[#4f5f49]"
-                            }`}
+                            className={`rounded-[6px] px-3 py-1 text-xs font-black ${statusClass(
+                              status
+                            )}`}
                           >
-                            Featured {product.featured ? "ON" : "OFF"}
+                            {status}
                           </span>
+                        </td>
 
-                          <span
-                            className={`rounded-[6px] px-2 py-1 text-[10px] font-black ${
-                              product.bestSeller
-                                ? "bg-green-50 text-green-700"
-                                : "bg-[#f5f1e8] text-[#4f5f49]"
-                            }`}
-                          >
-                            Best {product.bestSeller ? "ON" : "OFF"}
-                          </span>
+                        <td>{product.sold || 0}</td>
 
-                          <span
-                            className={`rounded-[6px] px-2 py-1 text-[10px] font-black ${
-                              product.flashSale
-                                ? "bg-red-50 text-red-700"
-                                : "bg-[#f5f1e8] text-[#4f5f49]"
-                            }`}
-                          >
-                            Flash {product.flashSale ? "ON" : "OFF"}
-                          </span>
+                        <td className="text-[#4f5f49]">
+                          {formatDate(product.createdAt)}
+                        </td>
 
-                          <span
-                            className={`rounded-[6px] px-2 py-1 text-[10px] font-black ${
-                              product.codAvailable === false
-                                ? "bg-red-50 text-red-700"
-                                : "bg-green-50 text-green-700"
-                            }`}
-                          >
-                            COD {product.codAvailable === false ? "OFF" : "ON"}
-                          </span>
-                        </div>
-                      </td>
+                        <td>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleCOD(product)}
+                              title="COD ON/OFF"
+                              className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
+                                product.codAvailable === false
+                                  ? "bg-red-50 text-red-600"
+                                  : "bg-green-50 text-green-600"
+                              }`}
+                            >
+                              <Eye size={13} />
+                              COD
+                            </button>
 
-                      <td>{product.sold || 0}</td>
+                            <button
+                              type="button"
+                              onClick={() => toggleFeatured(product)}
+                              title="Featured ON/OFF"
+                              className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
+                                product.featured
+                                  ? "bg-green-50 text-green-600"
+                                  : "bg-[#f5f1e8] text-[#0b3d2e]"
+                              }`}
+                            >
+                              <Star size={13} />
+                              Feature
+                            </button>
 
-                      <td className="text-[#4f5f49]">
-                        {formatDate(product.createdAt)}
-                      </td>
+                            <button
+                              type="button"
+                              onClick={() => toggleBestSeller(product)}
+                              title="Best Seller ON/OFF"
+                              className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
+                                product.bestSeller
+                                  ? "bg-green-50 text-green-600"
+                                  : "bg-[#f5f1e8] text-[#0b3d2e]"
+                              }`}
+                            >
+                              <CheckCircle2 size={13} />
+                              Best
+                            </button>
 
-                      <td>
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => toggleCOD(product)}
-                            title="COD ON/OFF"
-                            className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
-                              product.codAvailable === false
-                                ? "bg-red-50 text-red-600"
-                                : "bg-green-50 text-green-600"
-                            }`}
-                          >
-                            <Eye size={13} />
-                            COD
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleFlashSale(product)}
+                              title="Flash Sale ON/OFF"
+                              className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
+                                product.flashSale
+                                  ? "bg-red-50 text-red-700"
+                                  : "bg-[#f5f1e8] text-[#0b3d2e]"
+                              }`}
+                            >
+                              <Flame size={13} />
+                              Flash
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={() => toggleFeatured(product)}
-                            title="Featured ON/OFF"
-                            className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
-                              product.featured
-                                ? "bg-green-50 text-green-600"
-                                : "bg-[#f5f1e8] text-[#0b3d2e]"
-                            }`}
-                          >
-                            <Star size={13} />
-                            Feature
-                          </button>
+                            <button
+                              onClick={() => openEditModal(product)}
+                              className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-yellow-50 text-yellow-700"
+                              title="Edit Product"
+                            >
+                              <Pencil size={15} />
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={() => toggleBestSeller(product)}
-                            title="Best Seller ON/OFF"
-                            className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
-                              product.bestSeller
-                                ? "bg-green-50 text-green-600"
-                                : "bg-[#f5f1e8] text-[#0b3d2e]"
-                            }`}
-                          >
-                            <CheckCircle2 size={13} />
-                            Best
-                          </button>
+                            <button
+                              onClick={() => handleDeleteProduct(product)}
+                              className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-red-50 text-red-700"
+                              title="Delete Product"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-                          <button
-                            type="button"
-                            onClick={() => toggleFlashSale(product)}
-                            title="Flash Sale ON/OFF"
-                            className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
-                              product.flashSale
-                                ? "bg-red-50 text-red-700"
-                                : "bg-[#f5f1e8] text-[#0b3d2e]"
-                            }`}
-                          >
-                            <Flame size={13} />
-                            Flash
-                          </button>
+            {totalPages > 1 && (
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => goToPage(currentPage - 1)}
+                  className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#d9d5ca] bg-white text-[#263421] transition hover:border-[#0b3d2e] hover:text-[#0b3d2e] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ‹
+                </button>
 
-                          <button
-                            onClick={() => openEditModal(product)}
-                            className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-yellow-50 text-yellow-700"
-                            title="Edit Product"
-                          >
-                            <Pencil size={15} />
-                          </button>
+                {visiblePages.map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => goToPage(page)}
+                    className={`flex h-10 w-10 items-center justify-center rounded-[6px] border text-sm font-bold transition ${
+                      currentPage === page
+                        ? "border-[#0b3d2e] bg-[#0b3d2e] text-white"
+                        : "border-[#d9d5ca] bg-white text-[#263421] hover:border-[#0b3d2e] hover:text-[#0b3d2e]"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
 
-                          <button
-                            onClick={() => handleDeleteProduct(product)}
-                            className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-red-50 text-red-700"
-                            title="Delete Product"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => goToPage(currentPage + 1)}
+                  className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#d9d5ca] bg-white text-[#263421] transition hover:border-[#0b3d2e] hover:text-[#0b3d2e] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ›
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
 
@@ -1047,6 +1156,13 @@ export default function AdminProductsPage() {
                   </option>
                 ))}
               </select>
+
+              <input
+                placeholder="Product Type e.g. Oil, Face Mask, Cleanser"
+                value={productType}
+                onChange={(e) => setProductType(e.target.value)}
+                className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#FCFCFA] px-5 py-4 outline-none"
+              />
 
               <input
                 value={brandId}
@@ -1146,8 +1262,7 @@ export default function AdminProductsPage() {
                   </div>
 
                   <p className="text-sm font-bold text-red-700 sm:col-span-2">
-                    Flash Sale ON করলে এই product home page Flash Sale section এ
-                    show হবে।
+                    Flash Sale ON করলে এই product home page Flash Sale section এ show হবে।
                   </p>
                 </div>
               )}

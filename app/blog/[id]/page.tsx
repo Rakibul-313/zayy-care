@@ -5,12 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  ArrowLeft,
-  CalendarDays,
-  Leaf,
-  UserRound,
-} from "lucide-react";
+import { ArrowLeft, CalendarDays, Leaf, UserRound } from "lucide-react";
 import { onValue, ref } from "firebase/database";
 
 import Navbar from "@/components/Navbar";
@@ -21,6 +16,7 @@ import { getWishlistCount } from "@/lib/wishlist";
 
 type BlogPost = {
   id: string;
+  slug?: string;
   deleted?: boolean;
   title?: string;
   category?: string;
@@ -36,18 +32,14 @@ type BlogPost = {
 
 function safeImage(src?: string) {
   if (!src || src.trim() === "") return "/banners/shop-hero-desktop.png";
-
   const image = src.trim();
-
   if (image.startsWith("http://") || image.startsWith("https://")) return image;
   if (image.startsWith("/")) return image;
-
   return `/${image}`;
 }
 
 function formatDate(value?: number) {
   if (!value) return "N/A";
-
   return new Date(value).toLocaleDateString("en-US", {
     month: "short",
     day: "2-digit",
@@ -55,9 +47,20 @@ function formatDate(value?: number) {
   });
 }
 
+function generateSlug(text?: string) {
+  if (!text) return "";
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export default function BlogDetailsPage() {
   const params = useParams();
-  const id = String(params.id);
+  const id = String(params.id || "");
 
   const [post, setPost] = useState<BlogPost | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,16 +71,31 @@ export default function BlogDetailsPage() {
     setCartCount(getCartCount());
     setWishlistCount(getWishlistCount());
 
-    const unsubscribePost = onValue(ref(database, `blogs/${id}`), (snapshot) => {
+    const unsubscribePost = onValue(ref(database, "blogs"), (snapshot) => {
       const data = snapshot.val();
 
-      if (!data || data.published === false || data.deleted === true) {
+      if (!data) {
+        setPost(null);
+        setLoading(false);
+        return;
+      }
+
+      const found = Object.entries(data)
+        .map(([blogId, value]: any) => {
+          const blog = value as Omit<BlogPost, "id">;
+
+          return {
+            id: blogId,
+            ...blog,
+            slug: blog.slug || generateSlug(blog.title),
+          };
+        })
+        .find((blog) => blog.slug === id || blog.id === id);
+
+      if (!found || found.published === false || found.deleted === true) {
         setPost(null);
       } else {
-        setPost({
-          id,
-          ...(data as Omit<BlogPost, "id">),
-        });
+        setPost(found);
       }
 
       setLoading(false);
@@ -129,7 +147,6 @@ export default function BlogDetailsPage() {
                 <h1 className="text-3xl font-black text-[#102015]">
                   Article not found
                 </h1>
-
                 <p className="mt-3 text-sm text-[#4f5f49]">
                   This blog post may be unpublished or deleted.
                 </p>

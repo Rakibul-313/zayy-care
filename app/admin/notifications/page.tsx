@@ -23,6 +23,7 @@ type Order = {
   status?: string;
   total?: number;
   createdAt?: number;
+  adminNotificationDeleted?: boolean;
   customer?: {
     name?: string;
     email?: string;
@@ -40,6 +41,7 @@ type Review = {
   customerName?: string;
   approved?: boolean;
   createdAt?: number;
+  adminNotificationDeleted?: boolean;
 };
 
 type Product = {
@@ -48,6 +50,7 @@ type Product = {
   name?: string;
   stock?: number;
   lowStockLimit?: number;
+  adminNotificationDeleted?: boolean;
 };
 
 type Subscriber = {
@@ -55,6 +58,7 @@ type Subscriber = {
   deleted?: boolean;
   email?: string;
   createdAt?: number;
+  adminNotificationDeleted?: boolean;
 };
 
 type UserProfile = {
@@ -62,6 +66,7 @@ type UserProfile = {
   name?: string;
   email?: string;
   createdAt?: number;
+  adminNotificationDeleted?: boolean;
 };
 
 type NotificationType = "order" | "review" | "stock" | "subscriber" | "customer";
@@ -69,6 +74,7 @@ type NotificationFilter = "all" | NotificationType;
 
 type NotificationItem = {
   id: string;
+  rawId: string;
   type: NotificationType;
   title: string;
   message: string;
@@ -94,6 +100,7 @@ export default function AdminNotificationsPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState("");
 
   useEffect(() => {
     let loadedOrders = false;
@@ -233,9 +240,10 @@ export default function AdminNotificationsPage() {
     orders.forEach((order) => {
       const status = order.status || "pending";
 
-      if (status === "pending") {
+      if (status === "pending" && order.adminNotificationDeleted !== true) {
         items.push({
           id: `order-${order.id}`,
+          rawId: order.id,
           type: "order",
           title: "New pending order",
           message: `${
@@ -251,9 +259,13 @@ export default function AdminNotificationsPage() {
     });
 
     reviews.forEach((review) => {
-      if (review.approved === false) {
+      if (
+        review.approved === false &&
+        review.adminNotificationDeleted !== true
+      ) {
         items.push({
           id: `review-${review.id}`,
+          rawId: review.id,
           type: "review",
           title: "Review waiting for approval",
           message: `${review.customerName || "Customer"} reviewed ${
@@ -267,12 +279,15 @@ export default function AdminNotificationsPage() {
     });
 
     products.forEach((product) => {
+      if (product.adminNotificationDeleted === true) return;
+
       const stock = Number(product.stock || 0);
       const limit = Number(product.lowStockLimit || 5);
 
       if (stock <= 0) {
         items.push({
           id: `stock-out-${product.firebaseId}`,
+          rawId: product.firebaseId,
           type: "stock",
           title: "Product out of stock",
           message: `${product.name || "Unnamed Product"} is out of stock.`,
@@ -283,6 +298,7 @@ export default function AdminNotificationsPage() {
       } else if (stock <= limit) {
         items.push({
           id: `stock-low-${product.firebaseId}`,
+          rawId: product.firebaseId,
           type: "stock",
           title: "Low stock alert",
           message: `${product.name || "Unnamed Product"} has only ${stock} left.`,
@@ -297,9 +313,10 @@ export default function AdminNotificationsPage() {
       const isRecent =
         subscriber.createdAt && Date.now() - subscriber.createdAt < 86400000;
 
-      if (isRecent) {
+      if (isRecent && subscriber.adminNotificationDeleted !== true) {
         items.push({
           id: `subscriber-${subscriber.id}`,
+          rawId: subscriber.id,
           type: "subscriber",
           title: "New newsletter subscriber",
           message: `${subscriber.email || "Someone"} subscribed today.`,
@@ -313,9 +330,10 @@ export default function AdminNotificationsPage() {
     users.forEach((user) => {
       const isRecent = user.createdAt && Date.now() - user.createdAt < 86400000;
 
-      if (isRecent) {
+      if (isRecent && user.adminNotificationDeleted !== true) {
         items.push({
           id: `customer-${user.uid}`,
+          rawId: user.uid,
           type: "customer",
           title: "New customer account",
           message: `${user.name || user.email || "Customer"} joined today.`,
@@ -350,11 +368,50 @@ export default function AdminNotificationsPage() {
     await updateOrderStatusWithStock(orderId, "processing");
   };
 
-  const clearLowStockProduct = async (productId: string) => {
-    await update(ref(database, `products/${productId}`), {
-      lowStockLimit: 0,
-      updatedAt: Date.now(),
-    });
+  const deleteNotification = async (item: NotificationItem) => {
+    const confirmDelete = confirm(`Delete "${item.title}" notification?`);
+    if (!confirmDelete) return;
+
+    try {
+      setDeletingId(item.id);
+
+      if (item.type === "order") {
+        await update(ref(database, `orders/${item.rawId}`), {
+          adminNotificationDeleted: true,
+          adminNotificationDeletedAt: Date.now(),
+        });
+      }
+
+      if (item.type === "review") {
+        await update(ref(database, `reviews/${item.rawId}`), {
+          adminNotificationDeleted: true,
+          adminNotificationDeletedAt: Date.now(),
+        });
+      }
+
+      if (item.type === "stock") {
+        await update(ref(database, `products/${item.rawId}`), {
+          adminNotificationDeleted: true,
+          adminNotificationDeletedAt: Date.now(),
+        });
+      }
+
+      if (item.type === "subscriber") {
+        await update(ref(database, `subscribers/${item.rawId}`), {
+          adminNotificationDeleted: true,
+          adminNotificationDeletedAt: Date.now(),
+        });
+      }
+
+      if (item.type === "customer") {
+        await update(ref(database, `users/${item.rawId}`), {
+          adminNotificationDeleted: true,
+          adminNotificationDeletedAt: Date.now(),
+        });
+      }
+    } finally {
+      setDeletingId("");
+    }
   };
 
   const typeIcon = (type: NotificationType) => {
@@ -478,11 +535,6 @@ export default function AdminNotificationsPage() {
             {filteredNotifications.map((item) => {
               const Icon = typeIcon(item.type);
 
-              const rawId = item.id
-                .replace("order-", "")
-                .replace("stock-low-", "")
-                .replace("stock-out-", "");
-
               return (
                 <div
                   key={item.id}
@@ -532,23 +584,22 @@ export default function AdminNotificationsPage() {
                     {item.type === "order" && (
                       <button
                         type="button"
-                        onClick={() => markOrderProcessing(rawId)}
+                        onClick={() => markOrderProcessing(item.rawId)}
                         className="rounded-[6px] bg-green-50 px-4 py-3 text-sm font-bold text-green-700 transition hover:bg-green-100"
                       >
                         Process
                       </button>
                     )}
 
-                    {item.type === "stock" && (
-                      <button
-                        type="button"
-                        onClick={() => clearLowStockProduct(rawId)}
-                        className="flex h-11 w-11 items-center justify-center rounded-[6px] bg-red-50 text-red-700 transition hover:bg-red-100"
-                        aria-label="Clear stock notification"
-                      >
-                        <Trash2 size={17} />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      disabled={deletingId === item.id}
+                      onClick={() => deleteNotification(item)}
+                      className="flex h-11 w-11 items-center justify-center rounded-[6px] bg-red-50 text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                      aria-label="Delete notification"
+                    >
+                      <Trash2 size={17} />
+                    </button>
                   </div>
                 </div>
               );

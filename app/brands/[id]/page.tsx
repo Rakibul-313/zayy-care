@@ -30,6 +30,7 @@ type Product = {
   id: number;
   firebaseId?: string;
   brandId?: string;
+  slug?: string;
   name: string;
   brand?: string;
   category: string;
@@ -45,6 +46,8 @@ type Product = {
   active?: boolean;
   deleted?: boolean;
 };
+
+const PRODUCTS_PER_PAGE = 24;
 
 function safeImage(src?: string) {
   if (!src || src.trim() === "") return "/products/p1.png";
@@ -110,6 +113,7 @@ export default function BrandDetailsPage() {
   const [wishlist, setWishlist] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     const resize = () => setIsMobile(window.innerWidth < 768);
@@ -168,6 +172,7 @@ export default function BrandDetailsPage() {
           return {
             firebaseId,
             id: Number(product.id || index + 1),
+            slug: product.slug || "",
             brandId: product.brandId || "",
             name: product.name || "Unnamed Product",
             brand: product.brand || "ZAYY Care",
@@ -194,6 +199,7 @@ export default function BrandDetailsPage() {
       saveFirebaseProducts(
         loaded.map((product) => ({
           id: product.id,
+          slug: product.slug,
           firebaseId: product.firebaseId,
           name: product.name,
           image: product.image,
@@ -247,6 +253,55 @@ export default function BrandDetailsPage() {
       return matchByBrandId || matchByBrandName;
     });
   }, [products, brand]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(brandProducts.length / PRODUCTS_PER_PAGE)
+  );
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
+    return brandProducts.slice(startIndex, startIndex + PRODUCTS_PER_PAGE);
+  }, [brandProducts, currentPage]);
+
+  const visiblePages = useMemo(() => {
+    const pages: number[] = [];
+    const maxVisible = isMobile ? 3 : 5;
+
+    let start = Math.max(1, currentPage - 1);
+    let end = Math.min(totalPages, start + maxVisible - 1);
+
+    if (end - start + 1 < maxVisible) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+
+    for (let page = start; page <= end; page++) {
+      pages.push(page);
+    }
+
+    return pages;
+  }, [currentPage, totalPages, isMobile]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [brandSlug, brandProducts.length]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const goToPage = (page: number) => {
+    const nextPage = Math.min(Math.max(page, 1), totalPages);
+    setCurrentPage(nextPage);
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("brand-products")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   const handleAddToCart = (id: number) => {
     const product = products.find((item) => item.id === id);
@@ -330,11 +385,13 @@ export default function BrandDetailsPage() {
           </div>
         </section>
 
-        <section className="px-4 py-8 sm:px-8 lg:px-14">
+        <section id="brand-products" className="px-4 py-8 sm:px-8 lg:px-14">
           <div className="mx-auto max-w-[1820px]">
             <div className="mb-5 rounded-[6px] border border-[#0b3d2e]/10 bg-white p-4">
               <p className="text-sm text-[#4f5f49]">
-                {loading ? "Loading..." : `${brandProducts.length} Products`}
+                {loading
+                  ? "Loading..."
+                  : `${brandProducts.length} Products • Page ${currentPage} of ${totalPages}`}
               </p>
             </div>
 
@@ -363,18 +420,60 @@ export default function BrandDetailsPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
-                {brandProducts.map((product) => (
-                  <PremiumProductCard
+              <>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+                  {paginatedProducts.map((product) => (
+                    <PremiumProductCard
                     key={product.firebaseId || product.id}
                     product={product as any}
+                    href={`/product/${product.slug || product.id}`}
                     className="w-full rounded-[6px]"
                     isWishlisted={wishlist.includes(product.id)}
                     onToggleWishlist={handleToggleWishlist}
                     onAddToCart={handleAddToCart}
                   />
-                ))}
-              </div>
+                  ))}
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="mt-10 flex flex-wrap items-center justify-center gap-2 pb-8">
+                    <button
+                      type="button"
+                      disabled={currentPage === 1}
+                      onClick={() => goToPage(currentPage - 1)}
+                      className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#d9d5ca] bg-white text-[#263421] transition hover:border-[#0b3d2e] hover:text-[#0b3d2e] disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11"
+                      aria-label="Previous page"
+                    >
+                      ‹
+                    </button>
+
+                    {visiblePages.map((page) => (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => goToPage(page)}
+                        className={`flex h-10 w-10 items-center justify-center rounded-[6px] border text-sm font-bold transition sm:h-11 sm:w-11 ${
+                          currentPage === page
+                            ? "border-[#0b3d2e] bg-[#0b3d2e] text-white"
+                            : "border-[#d9d5ca] bg-white text-[#263421] hover:border-[#0b3d2e] hover:text-[#0b3d2e]"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      disabled={currentPage === totalPages}
+                      onClick={() => goToPage(currentPage + 1)}
+                      className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#d9d5ca] bg-white text-[#263421] transition hover:border-[#0b3d2e] hover:text-[#0b3d2e] disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11"
+                      aria-label="Next page"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>

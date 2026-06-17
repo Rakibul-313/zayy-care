@@ -55,9 +55,14 @@ export function toggleWishlist(id: number) {
   saveWishlist(updated);
 
   const firebaseProducts = getFirebaseProducts();
-const allProducts = [...firebaseProducts, ...products];
 
-  return allProducts.filter((product) => updated.includes(product.id));
+  return updated
+    .map(
+      (id) =>
+        firebaseProducts.find((product) => product.id === id) ||
+        products.find((product) => product.id === id)
+    )
+    .filter(Boolean);
 }
 
 export function isWishlisted(id: number) {
@@ -71,7 +76,12 @@ export function getWishlistCount() {
 export function getWishlistItems() {
   const wishlist = getWishlist();
   const firebaseProducts = getFirebaseProducts();
-  const allProducts = [...firebaseProducts, ...products];
 
-  return allProducts.filter((product) => wishlist.includes(product.id));
+  return wishlist
+    .map(
+      (id) =>
+        firebaseProducts.find((product) => product.id === id) ||
+        products.find((product) => product.id === id)
+    )
+    .filter(Boolean);
 }

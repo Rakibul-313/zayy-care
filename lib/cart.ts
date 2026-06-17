@@ -8,6 +8,7 @@ export type CartItem = {
 
 export type FirebaseCartProduct = {
   id: number;
+  slug?: string;
   firebaseId?: string;
   name: string;
   image: string;

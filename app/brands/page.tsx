@@ -26,6 +26,8 @@ type Brand = {
   deleted?: boolean;
 };
 
+const BRANDS_PER_PAGE = 24;
+
 function safeLogo(src?: string) {
   if (!src || src.trim() === "") return "";
 
@@ -61,6 +63,7 @@ export default function BrandsPage() {
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     setMounted(true);
@@ -147,6 +150,55 @@ export default function BrandsPage() {
       return matchCountry && matchCategory;
     });
   }, [brands, selectedCountry, selectedCategory]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredBrands.length / BRANDS_PER_PAGE)
+  );
+
+  const paginatedBrands = useMemo(() => {
+    const startIndex = (currentPage - 1) * BRANDS_PER_PAGE;
+    return filteredBrands.slice(startIndex, startIndex + BRANDS_PER_PAGE);
+  }, [filteredBrands, currentPage]);
+
+  const visiblePages = useMemo(() => {
+    const pages: number[] = [];
+    const maxVisible = isMobile ? 3 : 5;
+
+    let start = Math.max(1, currentPage - 1);
+    let end = Math.min(totalPages, start + maxVisible - 1);
+
+    if (end - start + 1 < maxVisible) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+
+    for (let page = start; page <= end; page++) {
+      pages.push(page);
+    }
+
+    return pages;
+  }, [currentPage, totalPages, isMobile]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCountry, selectedCategory]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const goToPage = (page: number) => {
+    const nextPage = Math.min(Math.max(page, 1), totalPages);
+    setCurrentPage(nextPage);
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("brand-list")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   const clearFilters = () => {
     setSelectedCountry("All");
@@ -387,10 +439,11 @@ export default function BrandsPage() {
               </div>
             </aside>
 
-            <div>
+            <div id="brand-list" className="w-full min-w-0">
               <div className="mb-5 rounded-[6px] border border-[#0b3d2e]/10 bg-white p-4">
                 <p className="text-sm text-[#4f5f49]">
-                  {filteredBrands.length} Brands
+                  {filteredBrands.length} Brands • Page {currentPage} of{" "}
+                  {totalPages}
                 </p>
 
                 <div className="mt-4 flex gap-2 overflow-x-auto pb-1 scrollbar-hide lg:hidden">
@@ -420,39 +473,47 @@ export default function BrandsPage() {
                 </div>
               </div>
 
-              <section className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+              <section
+                className="grid w-full gap-x-4 gap-y-6 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8"
+                style={{
+                  gridTemplateColumns: isMobile
+                    ? "repeat(2, minmax(0, 1fr))"
+                    : undefined,
+                }}
+              >
                 {filteredBrands.length === 0 ? (
                   <div className="col-span-full rounded-[6px] border border-[#0b3d2e]/10 bg-[#FCFCFA] p-8 text-[#263421] shadow-[0_8px_24px_rgba(11,61,46,0.08)]">
                     No brands found. Add brands from Admin Panel.
                   </div>
                 ) : (
-                  filteredBrands.map((brand, index) => {
+                  paginatedBrands.map((brand, index) => {
                     const brandName = brand.name || "Brand";
                     const href = `/brands/${brand.brandId || brand.id}`;
 
                     return (
                       <motion.div
                         key={brand.id}
+                        className="w-full min-w-0"
                         initial={{ opacity: 0, y: 26, scale: 0.98 }}
                         whileInView={{ opacity: 1, y: 0, scale: 1 }}
                         viewport={{ once: true, amount: 0.18 }}
                         transition={{
-                          delay: index * 0.04,
+                          delay: index * 0.02,
                           type: "spring",
                           stiffness: 80,
                           damping: 20,
                         }}
                       >
                         <Link href={href} className="group block text-center">
-                          <div className="mx-auto flex aspect-square w-full max-w-[105px] items-center justify-center overflow-hidden rounded-full border border-[#0b3d2e]/10 bg-[#FCFCFA] p-4 shadow-[0_8px_24px_rgba(11,61,46,0.08)] transition-all duration-300 group-hover:-translate-y-1 group-hover:border-[#003f2a] group-hover:shadow-[0_16px_38px_rgba(11,61,46,0.14)] sm:max-w-[115px]">
+                          <div className="mx-auto flex aspect-square w-full max-w-[130px] items-center justify-center overflow-hidden rounded-full border border-[#0b3d2e]/10 bg-[#FCFCFA] p-4 shadow-[0_8px_24px_rgba(11,61,46,0.08)] transition-all duration-300 group-hover:-translate-y-1 group-hover:border-[#003f2a] group-hover:shadow-[0_16px_38px_rgba(11,61,46,0.14)] sm:max-w-[115px]">
                             {brand.logo ? (
                               <img
                                 src={brand.logo}
                                 alt={brandName}
-                                className="max-h-[48px] max-w-[82px] object-contain sm:max-h-[55px] sm:max-w-[90px]"
+                                className="max-h-[56px] max-w-[92px] object-contain sm:max-h-[55px] sm:max-w-[90px]"
                               />
                             ) : (
-                              <div className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#003f2a] text-sm font-black text-white sm:h-[58px] sm:w-[58px]">
+                              <div className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-[#003f2a] text-sm font-black text-white">
                                 {getBrandInitials(brandName)}
                               </div>
                             )}
@@ -469,6 +530,45 @@ export default function BrandsPage() {
               </section>
             </div>
           </div>
+
+          {totalPages > 1 && (
+            <div className="mx-auto mt-12 flex w-full max-w-[1820px] items-center justify-center gap-2 pb-10">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => goToPage(currentPage - 1)}
+                className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#d9d5ca] bg-white text-[#263421] transition hover:border-[#0b3d2e] hover:text-[#0b3d2e] disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11"
+                aria-label="Previous page"
+              >
+                ‹
+              </button>
+
+              {visiblePages.map((page) => (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => goToPage(page)}
+                  className={`flex h-10 w-10 items-center justify-center rounded-[6px] border text-sm font-bold transition sm:h-11 sm:w-11 ${
+                    currentPage === page
+                      ? "border-[#0b3d2e] bg-[#0b3d2e] text-white"
+                      : "border-[#d9d5ca] bg-white text-[#263421] hover:border-[#0b3d2e] hover:text-[#0b3d2e]"
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                disabled={currentPage === totalPages}
+                onClick={() => goToPage(currentPage + 1)}
+                className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#d9d5ca] bg-white text-[#263421] transition hover:border-[#0b3d2e] hover:text-[#0b3d2e] disabled:cursor-not-allowed disabled:opacity-40 sm:h-11 sm:w-11"
+                aria-label="Next page"
+              >
+                ›
+              </button>
+            </div>
+          )}
         </section>
 
         <Footer />

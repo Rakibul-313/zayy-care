@@ -34,6 +34,7 @@ type ProductType = {
   id: number;
   firebaseId?: string;
   name: string;
+  slug?: string;
   brand: string;
   category: string;
   image: string;
@@ -146,6 +147,7 @@ export default function ProductPage() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params.id);
+  const slug = String(params.id);
 
   const [firebaseProducts, setFirebaseProducts] = useState<ProductType[]>([]);
   const [firebaseReviews, setFirebaseReviews] = useState<ReviewType[]>([]);
@@ -208,6 +210,7 @@ export default function ProductPage() {
             firebaseId,
             id: Number(value.id || index + 1),
             name: value.name || "Unnamed Product",
+            slug: value.slug || "",
             brand: value.brand || "ZAYY Care",
             category: value.category || "Korean Skincare",
             image: getProductImage(value),
@@ -287,8 +290,12 @@ export default function ProductPage() {
   const fallbackProduct =
     staticProducts.find((p) => p.id === id) || staticProducts[0];
 
-  const product: ProductType =
-    firebaseProducts.find((p) => p.id === id) || {
+    const product: ProductType =
+      firebaseProducts.find(
+        (p) =>
+          p.slug === slug ||
+          String(p.id) === slug
+      ) || {
       id: fallbackProduct.id,
       name: fallbackProduct.name,
       brand: fallbackProduct.brand,

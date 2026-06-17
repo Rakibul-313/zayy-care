@@ -12,6 +12,7 @@ import { getWishlist, toggleWishlist } from "@/lib/wishlist";
 
 type FlashSaleProduct = {
   id: number;
+  slug?: string;
   firebaseId?: string;
   name: string;
   brand: string;
@@ -101,6 +102,7 @@ export default function FlashSaleSection() {
             firebaseId,
             id: Number(value.id || index + 1),
             name: value.name || "Unnamed Product",
+            slug: value.slug || "",
             brand: value.brand || "ZAYY Care",
             category: value.category || "Korean Skincare",
             image: safeImage(value.image || value.imageUrl || value.thumbnail),
@@ -146,6 +148,7 @@ export default function FlashSaleSection() {
       saveFirebaseProducts(
         formatted.map((product) => ({
           id: product.id,
+          slug: product.slug,
           firebaseId: product.firebaseId,
           name: product.name,
           image: product.image,

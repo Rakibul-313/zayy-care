@@ -15,6 +15,7 @@ import {
 
 type BlogPost = {
   id: string;
+  slug?: string;
   firebaseId?: string;
   deleted?: boolean;
   active?: boolean;
@@ -116,14 +117,29 @@ export default function AdminBlogPage() {
     setShowModal(true);
   };
 
+  function generateSlug(text: string) {
+    return text
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-");
+  }
   const handleSavePost = async () => {
     if (!title.trim() || !category.trim() || !summary.trim() || !content.trim()) {
       alert("Please fill title, category, summary and content");
       return;
     }
+    function generateSlug(text: string) {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-");
+}
 
     const postData = {
       title: title.trim(),
+      slug: generateSlug(title),
       category: category.trim(),
       summary: summary.trim(),
       content: content.trim(),
@@ -153,6 +169,7 @@ export default function AdminBlogPage() {
     resetForm();
     setShowModal(false);
   };
+  
 
   const togglePublish = async (post: BlogPost) => {
     await update(ref(database, `blogs/${post.id}`), {

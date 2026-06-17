@@ -21,6 +21,7 @@ import { getWishlistCount } from "@/lib/wishlist";
 
 type BlogPost = {
   id: string;
+  slug?: string;
   deleted?: boolean;
   title?: string;
   category?: string;
@@ -184,7 +185,7 @@ export default function BlogPage() {
             {featuredPost && (
               <article className="mb-8 grid overflow-hidden rounded-[6px] border border-[#0b3d2e]/10 bg-white shadow-[0_10px_28px_rgba(11,61,46,0.08)] lg:grid-cols-[1.05fr_.95fr]">
                 <Link
-                  href={`/blog/${featuredPost.id}`}
+                  href={`/blog/${featuredPost.slug || featuredPost.id}`}
                   className="relative min-h-[280px] overflow-hidden bg-[#f5f1e8]"
                 >
                   <Image
@@ -202,7 +203,7 @@ export default function BlogPage() {
                     Featured
                   </span>
 
-                  <Link href={`/blog/${featuredPost.id}`}>
+                  <Link href={`/blog/${featuredPost.slug || featuredPost.id}`}>
                     <h2 className="dream-font text-[34px] leading-tight text-[#0b3d2e] sm:text-[44px]">
                       {featuredPost.title}
                     </h2>
@@ -223,7 +224,7 @@ export default function BlogPage() {
                     </div>
 
                     <Link
-                      href={`/blog/${featuredPost.id}`}
+                      href={`/blog/${featuredPost.slug || featuredPost.id}`}
                       className="flex h-10 items-center gap-2 rounded-[6px] bg-[#0b3d2e] px-5 text-xs font-black uppercase text-white"
                     >
                       Read More
@@ -250,7 +251,7 @@ export default function BlogPage() {
                   className="overflow-hidden rounded-[6px] border border-[#0b3d2e]/10 bg-white shadow-[0_8px_24px_rgba(11,61,46,0.07)] transition hover:-translate-y-1"
                 >
                   <Link
-                    href={`/blog/${post.id}`}
+                    href={`/blog/${post.slug || post.id}`}
                     className="relative block h-[210px] overflow-hidden bg-[#f5f1e8]"
                   >
                     <Image
@@ -267,7 +268,7 @@ export default function BlogPage() {
                   </Link>
 
                   <div className="p-5">
-                    <Link href={`/blog/${post.id}`}>
+                    <Link href={`/blog/${post.slug || post.id}`}>
                       <h3 className="line-clamp-2 text-[18px] font-black leading-6 text-[#102015] hover:text-[#0b3d2e]">
                         {post.title}
                       </h3>
