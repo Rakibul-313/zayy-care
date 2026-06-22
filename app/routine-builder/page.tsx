@@ -29,6 +29,7 @@ import { getWishlist, getWishlistCount, toggleWishlist } from "@/lib/wishlist";
 
 type RoutineProduct = {
   id: number;
+  slug?: string;
   firebaseId?: string;
   name: string;
   brand?: string;
@@ -143,6 +144,7 @@ export default function RoutineBuilderPage() {
       saveFirebaseProducts(
         loaded.map((p) => ({
           id: p.id,
+          slug: p.slug,
           firebaseId: p.firebaseId,
           name: p.name,
           image: p.image,
@@ -479,29 +481,6 @@ export default function RoutineBuilderPage() {
                 Save Routine
               </button>
             </aside>
-          </div>
-        </section>
-
-        <section className="px-4 pb-10 sm:px-8 lg:px-14">
-          <div className="mx-auto grid max-w-[1820px] grid-cols-2 gap-3 rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] p-4 lg:grid-cols-5">
-            {[
-              [ShieldCheck, "100% Authentic", "Korean Skincare Products"],
-              [Truck, "Free Delivery", "on orders over ৳1,500"],
-              [ShoppingBag, "Secure Payment", "100% Safe Checkout"],
-              [RefreshCcw, "Easy Returns", "7 Days Return"],
-              [Sparkles, "Routine Match", "Real-time product picks"],
-            ].map(([Icon, title, text]: any) => (
-              <div
-                key={title}
-                className="flex items-center gap-3 border-[#0b3d2e]/10 p-3 lg:border-r lg:last:border-r-0"
-              >
-                <Icon size={22} className="text-[#0b3d2e]" />
-                <div>
-                  <h4 className="text-sm font-black text-[#102015]">{title}</h4>
-                  <p className="text-xs text-[#4f5f49]">{text}</p>
-                </div>
-              </div>
-            ))}
           </div>
         </section>
 

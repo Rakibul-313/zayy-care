@@ -12,6 +12,7 @@ import {
   Clock,
   Eye,
   PackageCheck,
+  Search,
   ShoppingBag,
   Trash2,
   Truck,
@@ -88,6 +89,7 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState("");
   const [deletingId, setDeletingId] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     let unsubscribeOrders: (() => void) | undefined;
@@ -150,6 +152,19 @@ export default function AdminOrdersPage() {
 
     return map;
   }, [orders]);
+
+  const filteredOrders = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase().replace("#", "");
+
+    if (!query) return orders;
+
+    return orders.filter((order) => {
+      const displayId = orderDisplayIds.get(order.id)?.toLowerCase() || "";
+      const firebaseId = order.id.toLowerCase();
+
+      return displayId.includes(query) || firebaseId.includes(query);
+    });
+  }, [orders, orderDisplayIds, searchQuery]);
 
   const stats = useMemo(() => {
     const totalRevenue = orders
@@ -214,9 +229,7 @@ export default function AdminOrdersPage() {
       <section className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-[#102015]">Orders</h1>
-          <p className="mt-1 text-sm text-[#4f5f49]">
-            Dashboard › Orders
-          </p>
+          <p className="mt-1 text-sm text-[#4f5f49]">Dashboard › Orders</p>
         </div>
 
         <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white px-4 py-3 text-sm font-black text-[#0b3d2e]">
@@ -239,10 +252,30 @@ export default function AdminOrdersPage() {
       </section>
 
       <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
-        <div className="mb-5 flex items-center justify-between">
-          <p className="text-sm font-bold text-[#4f5f49]">
-            Showing {orders.length} orders
-          </p>
+        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-bold text-[#4f5f49]">
+              Showing {filteredOrders.length} of {orders.length} orders
+            </p>
+            <p className="mt-1 text-xs font-medium text-[#4f5f49]">
+              Search by Order ID like 202606210001
+            </p>
+          </div>
+
+          <div className="relative w-full lg:max-w-sm">
+            <Search
+              size={17}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4f5f49]"
+            />
+
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search order ID..."
+              className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] py-3 pl-10 pr-4 text-sm font-bold text-[#102015] outline-none transition focus:border-[#0b3d2e] focus:bg-white"
+            />
+          </div>
         </div>
 
         {loading ? (
@@ -253,6 +286,16 @@ export default function AdminOrdersPage() {
             <h2 className="mt-4 text-2xl font-black text-[#102015]">
               No orders found
             </h2>
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="py-12 text-center">
+            <Search className="mx-auto text-[#003f2a]" size={44} />
+            <h2 className="mt-4 text-2xl font-black text-[#102015]">
+              No matching order found
+            </h2>
+            <p className="mt-2 text-sm text-[#4f5f49]">
+              Try searching with full Order ID or Firebase key.
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -273,7 +316,7 @@ export default function AdminOrdersPage() {
               </thead>
 
               <tbody>
-                {orders.map((order) => (
+                {filteredOrders.map((order) => (
                   <tr
                     key={order.id}
                     className="border-b border-[#0b3d2e]/10 text-[#263421]"
@@ -431,7 +474,11 @@ function SmallStatus({
         )}
       </div>
 
-      <p className={`mt-3 text-2xl font-black ${danger ? "text-red-600" : "text-[#0b3d2e]"}`}>
+      <p
+        className={`mt-3 text-2xl font-black ${
+          danger ? "text-red-600" : "text-[#0b3d2e]"
+        }`}
+      >
         {value}
       </p>
     </div>

@@ -11,7 +11,6 @@ import { ArrowLeft, ArrowRight, ShieldCheck } from "lucide-react";
 import { database } from "@/firebase/config";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-
 import {
   getCartCount,
   getCartItems,
@@ -21,16 +20,28 @@ import { getWishlistCount } from "@/lib/wishlist";
 
 type CartProduct = ReturnType<typeof getCartItems>[number];
 
-type PaymentMethod = "cod" | "bkash" | "nagad" | "bank";
+type PaymentMethod = "cod" | "bkash" | "nagad" | "rocket" | "bank";
+
+type BankAccount = {
+  id: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  branch: string;
+  routingNumber: string;
+};
 
 type PaymentSettings = {
   codEnabled: boolean;
   bkashEnabled: boolean;
   nagadEnabled: boolean;
+  rocketEnabled: boolean;
   bankEnabled: boolean;
   bkashNumber: string;
   nagadNumber: string;
+  rocketNumber: string;
   bankInfo: string;
+  bankAccounts: BankAccount[];
 };
 
 type CheckoutShipping = {
@@ -41,7 +52,7 @@ type CheckoutShipping = {
   area: string;
   address: string;
   note: string;
-  shippingMethod: "standard" | "express";
+  shippingArea?: "insideDhaka" | "outsideDhaka";
   shipping: number;
 };
 
@@ -60,20 +71,20 @@ const defaultSettings: PaymentSettings = {
   codEnabled: true,
   bkashEnabled: true,
   nagadEnabled: true,
+  rocketEnabled: false,
   bankEnabled: false,
   bkashNumber: "",
   nagadNumber: "",
+  rocketNumber: "",
   bankInfo: "",
+  bankAccounts: [],
 };
 
 function safeImage(src?: string) {
   if (!src || src.trim() === "") return "/products/p1.png";
-
   const image = src.trim();
-
   if (image.startsWith("http://") || image.startsWith("https://")) return image;
   if (image.startsWith("/")) return image;
-
   return `/${image}`;
 }
 
@@ -97,6 +108,7 @@ export default function CheckoutPaymentPage() {
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cod");
   const [trxId, setTrxId] = useState("");
+  const [selectedBankId, setSelectedBankId] = useState("");
 
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [couponCode, setCouponCode] = useState("");
@@ -126,6 +138,7 @@ export default function CheckoutPaymentPage() {
       const parsed = JSON.parse(savedPayment);
       setPaymentMethod(parsed.paymentMethod || "cod");
       setTrxId(parsed.trxId || "");
+      setSelectedBankId(parsed.selectedBankId || "");
     }
 
     const savedCoupon = localStorage.getItem("zayyCheckoutCoupon");
@@ -148,6 +161,7 @@ export default function CheckoutPaymentPage() {
               firebaseId,
               id: Number(product.id || index + 1),
               name: product.name || "Unnamed Product",
+              slug: product.slug || "",
               image: safeImage(product.image),
               category: product.category || "Korean Skincare",
               price: Number(product.price || 0),
@@ -173,19 +187,28 @@ export default function CheckoutPaymentPage() {
       ref(database, "settings/payment"),
       (snapshot) => {
         const data = snapshot.val();
-        if (data) setSettings({ ...defaultSettings, ...data });
+
+        if (data) {
+          const nextSettings = {
+            ...defaultSettings,
+            ...data,
+            bankAccounts: Array.isArray(data.bankAccounts)
+              ? data.bankAccounts
+              : [],
+          };
+
+          setSettings(nextSettings);
+
+          if (!selectedBankId && nextSettings.bankAccounts.length > 0) {
+            setSelectedBankId(nextSettings.bankAccounts[0].id);
+          }
+        }
       }
     );
 
     const couponUnsubscribe = onValue(ref(database, "coupons"), (snapshot) => {
       const data = snapshot.val();
-
-      if (!data) {
-        setCoupons([]);
-        return;
-      }
-
-      setCoupons(Object.values(data) as Coupon[]);
+      setCoupons(data ? (Object.values(data) as Coupon[]) : []);
     });
 
     window.addEventListener("cartUpdated", loadCart);
@@ -198,7 +221,7 @@ export default function CheckoutPaymentPage() {
       window.removeEventListener("cartUpdated", loadCart);
       window.removeEventListener("storage", loadCart);
     };
-  }, [router]);
+  }, [router, selectedBankId]);
 
   const subtotal = useMemo(() => {
     return cartItems.reduce(
@@ -219,17 +242,30 @@ export default function CheckoutPaymentPage() {
     if (paymentMethod === "cod" && !codAllowed) {
       if (settings.bkashEnabled) setPaymentMethod("bkash");
       else if (settings.nagadEnabled) setPaymentMethod("nagad");
+      else if (settings.rocketEnabled) setPaymentMethod("rocket");
       else if (settings.bankEnabled) setPaymentMethod("bank");
     }
   }, [codAllowed, paymentMethod, settings]);
+
+  const selectedBank = settings.bankAccounts.find(
+    (account) => account.id === selectedBankId
+  );
 
   const paymentInfo =
     paymentMethod === "bkash"
       ? `Send Money to bKash: ${settings.bkashNumber || "Not set"}`
       : paymentMethod === "nagad"
       ? `Send Money to Nagad: ${settings.nagadNumber || "Not set"}`
+      : paymentMethod === "rocket"
+      ? `Send Money to Rocket: ${settings.rocketNumber || "Not set"}`
       : paymentMethod === "bank"
-      ? settings.bankInfo || "Bank information not set"
+      ? selectedBank
+        ? `Bank Name: ${selectedBank.bankName || "Not set"}\nAccount Name: ${
+            selectedBank.accountName || "Not set"
+          }\nAccount Number: ${selectedBank.accountNumber || "Not set"}\nBranch: ${
+            selectedBank.branch || "Not set"
+          }\nRouting Number: ${selectedBank.routingNumber || "Not set"}`
+        : settings.bankInfo || "Bank information not set"
       : "";
 
   const clearCoupon = () => {
@@ -249,24 +285,12 @@ export default function CheckoutPaymentPage() {
       return;
     }
 
-    if (cartItems.length === 0) {
-      setError("Your cart is empty.");
-      return;
-    }
-
     const coupon = coupons.find(
       (item) => item.code?.trim().toUpperCase() === cleanCode
     );
 
-    if (!coupon) {
-      setError("Invalid coupon code.");
-      clearCoupon();
-      setCouponCode(cleanCode);
-      return;
-    }
-
-    if (!coupon.active) {
-      setError("Coupon is inactive.");
+    if (!coupon || !coupon.active) {
+      setError("Invalid or inactive coupon code.");
       clearCoupon();
       setCouponCode(cleanCode);
       return;
@@ -327,6 +351,13 @@ export default function CheckoutPaymentPage() {
       return;
     }
 
+    if (paymentMethod === "bank" && settings.bankAccounts.length > 0) {
+      if (!selectedBankId) {
+        setError("Please select a bank account.");
+        return;
+      }
+    }
+
     if (paymentMethod !== "cod" && !trxId.trim()) {
       setError("Please enter your Transaction ID.");
       return;
@@ -337,6 +368,8 @@ export default function CheckoutPaymentPage() {
       JSON.stringify({
         paymentMethod,
         trxId: paymentMethod === "cod" ? "" : trxId,
+        selectedBankId: paymentMethod === "bank" ? selectedBankId : "",
+        selectedBank: paymentMethod === "bank" ? selectedBank || null : null,
       })
     );
 
@@ -523,6 +556,25 @@ export default function CheckoutPaymentPage() {
                     </button>
                   )}
 
+                  {settings.rocketEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("rocket")}
+                      className={`rounded-[6px] border p-4 text-left transition ${
+                        paymentMethod === "rocket"
+                          ? "border-[#0b3d2e] bg-[#f5f1e8]"
+                          : "border-[#0b3d2e]/10 bg-white"
+                      }`}
+                    >
+                      <p className="font-black text-[#102015]">
+                        Rocket Payment
+                      </p>
+                      <p className="mt-1 text-sm text-[#4f5f49]">
+                        Pay with Rocket and enter Transaction ID.
+                      </p>
+                    </button>
+                  )}
+
                   {settings.bankEnabled && (
                     <button
                       type="button"
@@ -543,6 +595,28 @@ export default function CheckoutPaymentPage() {
 
                 {paymentMethod !== "cod" && (
                   <div className="mt-5 rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] p-4">
+                    {paymentMethod === "bank" &&
+                      settings.bankAccounts.length > 0 && (
+                        <div className="mb-4">
+                          <label className="mb-2 block text-xs font-black uppercase tracking-wide text-[#4f5f49]">
+                            Select Bank Account
+                          </label>
+
+                          <select
+                            value={selectedBankId}
+                            onChange={(e) => setSelectedBankId(e.target.value)}
+                            className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-white px-4 py-3 text-sm font-bold outline-none"
+                          >
+                            {settings.bankAccounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.bankName || "Bank"} —{" "}
+                                {account.accountNumber || "Account"}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
                     <p className="whitespace-pre-line text-sm font-bold text-[#102015]">
                       {paymentInfo}
                     </p>

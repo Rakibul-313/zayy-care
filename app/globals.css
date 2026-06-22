@@ -746,7 +746,7 @@ button {
   display: flex;
   gap: 3rem;
   width: max-content;
-  animation: brandScroll 25s linear infinite;
+  animation: brandScroll 150s linear infinite;
 }
 
 .brand-marquee:hover .brand-marquee-track {

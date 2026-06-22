@@ -47,11 +47,29 @@ type ShopProduct = {
   bestSeller?: boolean;
 };
 
+type ShippingSettings = {
+  enabled: boolean;
+  freeShippingEnabled: boolean;
+  freeShippingMinAmount: number;
+  insideDhakaCharge: number;
+  outsideDhakaCharge: number;
+  noLimitMode: boolean;
+};
+
+const defaultShippingSettings: ShippingSettings = {
+  enabled: true,
+  freeShippingEnabled: true,
+  freeShippingMinAmount: 1500,
+  insideDhakaCharge: 80,
+  outsideDhakaCharge: 120,
+  noLimitMode: false,
+};
+
 const taka = new Intl.NumberFormat("en-BD", { maximumFractionDigits: 0 });
 const PRODUCTS_PER_PAGE = 24;
 
 function formatPrice(price?: number) {
-  return `৳${taka.format(price || 0)}`;
+  return `৳${taka.format(Number(price || 0))}`;
 }
 
 function safeImage(src?: string) {
@@ -77,7 +95,7 @@ function ShopProductCard({
   onCart: () => void;
 }) {
   return (
-   <article className="group relative w-full min-w-0 overflow-hidden rounded-[12px] border border-[#e8e3d7] bg-white shadow-[0_10px_28px_rgba(11,61,46,0.09)] transition hover:-translate-y-1 hover:shadow-[0_18px_42px_rgba(11,61,46,0.14)]">
+    <article className="group relative w-full min-w-0 overflow-hidden rounded-[12px] border border-[#e8e3d7] bg-white shadow-[0_10px_28px_rgba(11,61,46,0.09)] transition hover:-translate-y-1 hover:shadow-[0_18px_42px_rgba(11,61,46,0.14)]">
       <Link
         href={`/product/${(product as any).slug || product.id}`}
         className="relative flex aspect-[27/23] items-center justify-center overflow-hidden bg-[#f5f1e8]"
@@ -177,6 +195,9 @@ export default function ShopPage() {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [shippingSettings, setShippingSettings] =
+    useState<ShippingSettings>(defaultShippingSettings);
+
   const searchParams = useSearchParams();
   const searchKeyword =
     searchParams.get("search")?.trim().toLowerCase() || "";
@@ -258,6 +279,43 @@ export default function ShopPage() {
   }, []);
 
   useEffect(() => {
+    const unsubscribe = onValue(ref(database, "settings/shipping"), (snapshot) => {
+      const data = snapshot.val();
+
+      if (!data) {
+        setShippingSettings(defaultShippingSettings);
+        return;
+      }
+
+      setShippingSettings({
+        enabled:
+          typeof data.enabled === "boolean"
+            ? data.enabled
+            : defaultShippingSettings.enabled,
+        freeShippingEnabled:
+          typeof data.freeShippingEnabled === "boolean"
+            ? data.freeShippingEnabled
+            : defaultShippingSettings.freeShippingEnabled,
+        freeShippingMinAmount:
+          Number(data.freeShippingMinAmount) ||
+          defaultShippingSettings.freeShippingMinAmount,
+        insideDhakaCharge:
+          Number(data.insideDhakaCharge) ||
+          defaultShippingSettings.insideDhakaCharge,
+        outsideDhakaCharge:
+          Number(data.outsideDhakaCharge) ||
+          defaultShippingSettings.outsideDhakaCharge,
+        noLimitMode:
+          typeof data.noLimitMode === "boolean"
+            ? data.noLimitMode
+            : defaultShippingSettings.noLimitMode,
+      });
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
     setCartCount(getCartCount());
     setWishlistCount(getWishlistCount());
     setWishlistIds(products.filter((p) => isWishlisted(p.id)).map((p) => p.id));
@@ -278,17 +336,33 @@ export default function ShopPage() {
     return Array.from(new Set(products.map((p) => p.brand).filter(Boolean)));
   }, [products]);
 
- const productTypes = useMemo<string[]>(() => {
-  const unique = Array.from(
-    new Set(
-      products
-        .map((p) => p.productType)
-        .filter((type): type is string => Boolean(type))
-    )
-  );
+  const productTypes = useMemo<string[]>(() => {
+    const unique = Array.from(
+      new Set(
+        products
+          .map((p) => p.productType)
+          .filter((type): type is string => Boolean(type))
+      )
+    );
 
-  return ["All", ...unique];
-}, [products]);
+    return ["All", ...unique];
+  }, [products]);
+
+  const deliveryTitle = shippingSettings.enabled ? "Delivery Charge" : "Free Delivery";
+
+  const deliveryText = useMemo(() => {
+    if (!shippingSettings.enabled) return "Free for all orders";
+
+    if (shippingSettings.freeShippingEnabled && !shippingSettings.noLimitMode) {
+      return `On orders over ${formatPrice(
+        shippingSettings.freeShippingMinAmount
+      )}`;
+    }
+
+    return `Dhaka ${formatPrice(
+      shippingSettings.insideDhakaCharge
+    )} / Outside ${formatPrice(shippingSettings.outsideDhakaCharge)}`;
+  }, [shippingSettings]);
 
   const filteredProducts = useMemo(() => {
     const result = products.filter((product) => {
@@ -413,10 +487,10 @@ export default function ShopPage() {
   };
 
   const handleWishlist = (id: number) => {
-  toggleWishlist(id);
-  setWishlistCount(getWishlistCount());
-  setWishlistIds(products.filter((p) => isWishlisted(p.id)).map((p) => p.id));
-};
+    toggleWishlist(id);
+    setWishlistCount(getWishlistCount());
+    setWishlistIds(products.filter((p) => isWishlisted(p.id)).map((p) => p.id));
+  };
 
   const mobileFilterDrawer =
     mounted && mobileFilterOpen
@@ -886,7 +960,7 @@ export default function ShopPage() {
           <div className="mx-auto grid max-w-[1820px] grid-cols-2 gap-3 rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] p-4 lg:grid-cols-5">
             {[
               [ShieldCheck, "100% Authentic", "Genuine Korean Products"],
-              [Truck, "Free Delivery", "On orders over ৳1,500"],
+              [Truck, deliveryTitle, deliveryText],
               [ShoppingBag, "Secure Payment", "100% Safe Checkout"],
               [RefreshCcw, "Easy Returns", "Hassle-free returns"],
               [Headphones, "24/7 Support", "We’re here to help"],

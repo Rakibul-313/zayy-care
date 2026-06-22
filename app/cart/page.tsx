@@ -14,9 +14,11 @@ import {
   Trash2,
   Truck,
 } from "lucide-react";
+import { onValue, ref } from "firebase/database";
 
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { database } from "@/firebase/config";
 
 import {
   getCartItems,
@@ -25,12 +27,29 @@ import {
   removeFromCart,
 } from "@/lib/cart";
 
-import {
-  getWishlistCount,
-  toggleWishlist,
-} from "@/lib/wishlist";
+import { getWishlistCount, toggleWishlist } from "@/lib/wishlist";
 
 type CartProduct = ReturnType<typeof getCartItems>[number];
+
+type ShippingArea = "insideDhaka" | "outsideDhaka";
+
+type ShippingSettings = {
+  enabled: boolean;
+  freeShippingEnabled: boolean;
+  freeShippingMinAmount: number;
+  insideDhakaCharge: number;
+  outsideDhakaCharge: number;
+  noLimitMode: boolean;
+};
+
+const defaultShippingSettings: ShippingSettings = {
+  enabled: true,
+  freeShippingEnabled: true,
+  freeShippingMinAmount: 1500,
+  insideDhakaCharge: 80,
+  outsideDhakaCharge: 120,
+  noLimitMode: false,
+};
 
 const taka = new Intl.NumberFormat("en-BD", { maximumFractionDigits: 0 });
 
@@ -51,6 +70,12 @@ export default function CartPage() {
   const [cartCount, setCartCount] = useState(0);
   const [wishlistCount, setWishlistCount] = useState(0);
 
+  const [shippingArea, setShippingArea] =
+    useState<ShippingArea>("insideDhaka");
+
+  const [shippingSettings, setShippingSettings] =
+    useState<ShippingSettings>(defaultShippingSettings);
+
   const loadCart = () => {
     setCartItems(getCartItems());
     setCartCount(getCartCount());
@@ -59,6 +84,11 @@ export default function CartPage() {
 
   useEffect(() => {
     loadCart();
+
+    const savedArea = localStorage.getItem("zayy_shipping_area");
+    if (savedArea === "insideDhaka" || savedArea === "outsideDhaka") {
+      setShippingArea(savedArea);
+    }
 
     window.addEventListener("cartUpdated", loadCart);
     window.addEventListener("wishlistUpdated", loadCart);
@@ -70,6 +100,55 @@ export default function CartPage() {
       window.removeEventListener("storage", loadCart);
     };
   }, []);
+
+  useEffect(() => {
+    const shippingRef = ref(database, "settings/shipping");
+
+    const unsub = onValue(shippingRef, (snapshot) => {
+      const data = snapshot.val();
+
+      if (!data) {
+        setShippingSettings(defaultShippingSettings);
+        return;
+      }
+
+      setShippingSettings({
+        enabled:
+          typeof data.enabled === "boolean"
+            ? data.enabled
+            : defaultShippingSettings.enabled,
+
+        freeShippingEnabled:
+          typeof data.freeShippingEnabled === "boolean"
+            ? data.freeShippingEnabled
+            : defaultShippingSettings.freeShippingEnabled,
+
+        freeShippingMinAmount:
+          Number(data.freeShippingMinAmount) ||
+          defaultShippingSettings.freeShippingMinAmount,
+
+        insideDhakaCharge:
+          Number(data.insideDhakaCharge) ||
+          defaultShippingSettings.insideDhakaCharge,
+
+        outsideDhakaCharge:
+          Number(data.outsideDhakaCharge) ||
+          defaultShippingSettings.outsideDhakaCharge,
+
+        noLimitMode:
+          typeof data.noLimitMode === "boolean"
+            ? data.noLimitMode
+            : defaultShippingSettings.noLimitMode,
+      });
+    });
+
+    return () => unsub();
+  }, []);
+
+  const handleAreaChange = (area: ShippingArea) => {
+    setShippingArea(area);
+    localStorage.setItem("zayy_shipping_area", area);
+  };
 
   const handleIncrease = (id: number) => {
     updateCartQuantity(id, 1);
@@ -100,8 +179,48 @@ export default function CartPage() {
     );
   }, [cartItems]);
 
-  const shipping = subtotal >= 1500 || subtotal === 0 ? 0 : 120;
+  const normalShippingCharge =
+    shippingArea === "insideDhaka"
+      ? shippingSettings.insideDhakaCharge
+      : shippingSettings.outsideDhakaCharge;
+
+  const shipping = useMemo(() => {
+    if (subtotal === 0) return 0;
+
+    if (!shippingSettings.enabled) return 0;
+
+    if (
+      shippingSettings.freeShippingEnabled &&
+      !shippingSettings.noLimitMode &&
+      subtotal >= shippingSettings.freeShippingMinAmount
+    ) {
+      return 0;
+    }
+
+    return normalShippingCharge;
+  }, [subtotal, shippingSettings, normalShippingCharge]);
+
   const total = subtotal + shipping;
+
+  const shippingMessage = !shippingSettings.enabled
+    ? "Shipping is currently free for all orders."
+    : shippingSettings.noLimitMode || !shippingSettings.freeShippingEnabled
+    ? `Delivery charge: Dhaka ${formatPrice(
+        shippingSettings.insideDhakaCharge
+      )}, Outside Dhaka ${formatPrice(shippingSettings.outsideDhakaCharge)}.`
+    : `Free delivery on orders over ${formatPrice(
+        shippingSettings.freeShippingMinAmount
+      )}. Dhaka ${formatPrice(
+        shippingSettings.insideDhakaCharge
+      )}, Outside Dhaka ${formatPrice(shippingSettings.outsideDhakaCharge)}.`;
+
+  const featureShippingText = !shippingSettings.enabled
+    ? "Free for all orders"
+    : shippingSettings.noLimitMode || !shippingSettings.freeShippingEnabled
+    ? `Dhaka ${formatPrice(
+        shippingSettings.insideDhakaCharge
+      )} / Outside ${formatPrice(shippingSettings.outsideDhakaCharge)}`
+    : `Free over ${formatPrice(shippingSettings.freeShippingMinAmount)}`;
 
   return (
     <>
@@ -152,7 +271,10 @@ export default function CartPage() {
             <div>
               {cartItems.length === 0 ? (
                 <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-10 text-center">
-                  <ShoppingBag size={56} className="mx-auto mb-5 text-[#0b3d2e]" />
+                  <ShoppingBag
+                    size={56}
+                    className="mx-auto mb-5 text-[#0b3d2e]"
+                  />
 
                   <h2 className="mb-3 text-2xl font-black text-[#102015]">
                     Your cart is empty
@@ -190,13 +312,13 @@ export default function CartPage() {
                               alt={item.name}
                               fill
                               sizes="120px"
-                              className="object-contain p-3"
+                              className="object-cover"
                             />
                           </Link>
 
                           <div className="pr-8 lg:pr-0">
                             <Link
-                              href={`/product/${item.id}`}
+                              href={`/product/${(item as any).slug || item.id}`}
                               className="line-clamp-2 text-[13px] font-black leading-5 text-[#102015] lg:text-[14px]"
                             >
                               {item.name}
@@ -293,6 +415,38 @@ export default function CartPage() {
                   </span>
                 </div>
 
+                <div>
+                  <p className="mb-2 text-xs font-black uppercase tracking-wide text-[#102015]">
+                    Delivery Area
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleAreaChange("insideDhaka")}
+                      className={`rounded-[6px] border px-3 py-2 text-xs font-black ${
+                        shippingArea === "insideDhaka"
+                          ? "border-[#0b3d2e] bg-[#0b3d2e] text-white"
+                          : "border-[#0b3d2e]/15 bg-[#f5f1e8] text-[#0b3d2e]"
+                      }`}
+                    >
+                      Dhaka
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAreaChange("outsideDhaka")}
+                      className={`rounded-[6px] border px-3 py-2 text-xs font-black ${
+                        shippingArea === "outsideDhaka"
+                          ? "border-[#0b3d2e] bg-[#0b3d2e] text-white"
+                          : "border-[#0b3d2e]/15 bg-[#f5f1e8] text-[#0b3d2e]"
+                      }`}
+                    >
+                      Outside Dhaka
+                    </button>
+                  </div>
+                </div>
+
                 <div className="flex justify-between">
                   <span className="text-[#4f5f49]">Shipping</span>
                   <span className="font-black text-[#102015]">
@@ -301,7 +455,7 @@ export default function CartPage() {
                 </div>
 
                 <div className="rounded-[6px] bg-[#f5f1e8] p-3 text-xs font-semibold text-[#4f5f49]">
-                  Free delivery on orders over ৳1,500.
+                  {shippingMessage}
                 </div>
 
                 <div className="h-px bg-[#0b3d2e]/10" />
@@ -333,7 +487,7 @@ export default function CartPage() {
           <div className="mx-auto grid max-w-[1820px] grid-cols-2 gap-3 rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] p-4 lg:grid-cols-5">
             {[
               [ShieldCheck, "100% Authentic", "Genuine Korean Products"],
-              [Truck, "Free Delivery", "On orders over ৳1,500"],
+              [Truck, "Delivery Charge", featureShippingText],
               [ShoppingBag, "Secure Payment", "100% Safe Checkout"],
               [RefreshCcw, "Easy Returns", "Hassle-free returns"],
               [Headphones, "24/7 Support", "We’re here to help"],
@@ -344,7 +498,9 @@ export default function CartPage() {
               >
                 <Icon size={22} className="text-[#0b3d2e]" />
                 <div>
-                  <h4 className="text-sm font-black text-[#102015]">{title}</h4>
+                  <h4 className="text-sm font-black text-[#102015]">
+                    {title}
+                  </h4>
                   <p className="text-xs text-[#4f5f49]">{text}</p>
                 </div>
               </div>

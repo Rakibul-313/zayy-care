@@ -18,6 +18,7 @@ import {
   Sparkles,
   Star,
   Target,
+  Truck,
   UserRound,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ import { getWishlist, getWishlistCount, toggleWishlist } from "@/lib/wishlist";
 
 type QuizProduct = {
   id: number;
+  slug?: string;
   firebaseId?: string;
   name: string;
   brand?: string;
@@ -50,6 +52,30 @@ type QuizProduct = {
   deleted?: boolean;
   active?: boolean;
 };
+
+type ShippingSettings = {
+  enabled: boolean;
+  freeShippingEnabled: boolean;
+  freeShippingMinAmount: number;
+  insideDhakaCharge: number;
+  outsideDhakaCharge: number;
+  noLimitMode: boolean;
+};
+
+const defaultShippingSettings: ShippingSettings = {
+  enabled: true,
+  freeShippingEnabled: true,
+  freeShippingMinAmount: 1500,
+  insideDhakaCharge: 80,
+  outsideDhakaCharge: 120,
+  noLimitMode: false,
+};
+
+const taka = new Intl.NumberFormat("en-BD", { maximumFractionDigits: 0 });
+
+function formatPrice(price?: number) {
+  return `৳${taka.format(Number(price || 0))}`;
+}
 
 const skinTypes = [
   ["Normal", "Balanced, not too oily or dry", UserRound],
@@ -104,6 +130,8 @@ export default function SkinQuizPage() {
   const [wishlist, setWishlist] = useState<number[]>([]);
   const [cartCount, setCartCount] = useState(0);
   const [wishlistCount, setWishlistCount] = useState(0);
+  const [shippingSettings, setShippingSettings] =
+    useState<ShippingSettings>(defaultShippingSettings);
 
   const [selectedSkinType, setSelectedSkinType] = useState("");
   const [selectedConcern, setSelectedConcern] = useState("");
@@ -115,7 +143,7 @@ export default function SkinQuizPage() {
     setCartCount(getCartCount());
     setWishlistCount(getWishlistCount());
 
-    const unsubscribe = onValue(ref(database, "products"), (snapshot) => {
+    const productsUnsubscribe = onValue(ref(database, "products"), (snapshot) => {
       const data = snapshot.val();
 
       if (!data) {
@@ -127,6 +155,7 @@ export default function SkinQuizPage() {
         .map(([firebaseId, value]: any, index) => ({
           firebaseId,
           id: Number(value.id || index + 1),
+          slug: value.slug || "",
           name: value.name || "Unnamed Product",
           brand: value.brand || "ZAYY Care",
           category: value.category || "Korean Skincare",
@@ -153,6 +182,7 @@ export default function SkinQuizPage() {
       saveFirebaseProducts(
         loaded.map((p) => ({
           id: p.id,
+          slug: p.slug,
           firebaseId: p.firebaseId,
           name: p.name,
           image: p.image,
@@ -164,6 +194,42 @@ export default function SkinQuizPage() {
         }))
       );
     });
+
+    const shippingUnsubscribe = onValue(
+      ref(database, "settings/shipping"),
+      (snapshot) => {
+        const data = snapshot.val();
+
+        if (!data) {
+          setShippingSettings(defaultShippingSettings);
+          return;
+        }
+
+        setShippingSettings({
+          enabled:
+            typeof data.enabled === "boolean"
+              ? data.enabled
+              : defaultShippingSettings.enabled,
+          freeShippingEnabled:
+            typeof data.freeShippingEnabled === "boolean"
+              ? data.freeShippingEnabled
+              : defaultShippingSettings.freeShippingEnabled,
+          freeShippingMinAmount:
+            Number(data.freeShippingMinAmount) ||
+            defaultShippingSettings.freeShippingMinAmount,
+          insideDhakaCharge:
+            Number(data.insideDhakaCharge) ||
+            defaultShippingSettings.insideDhakaCharge,
+          outsideDhakaCharge:
+            Number(data.outsideDhakaCharge) ||
+            defaultShippingSettings.outsideDhakaCharge,
+          noLimitMode:
+            typeof data.noLimitMode === "boolean"
+              ? data.noLimitMode
+              : defaultShippingSettings.noLimitMode,
+        });
+      }
+    );
 
     const updateWishlist = () => {
       setWishlist(getWishlist());
@@ -178,13 +244,32 @@ export default function SkinQuizPage() {
     window.addEventListener("storage", updateCart);
 
     return () => {
-      unsubscribe();
+      productsUnsubscribe();
+      shippingUnsubscribe();
       window.removeEventListener("wishlistUpdated", updateWishlist);
       window.removeEventListener("cartUpdated", updateCart);
       window.removeEventListener("storage", updateWishlist);
       window.removeEventListener("storage", updateCart);
     };
   }, []);
+
+  const deliveryTitle = shippingSettings.enabled
+    ? "Delivery Charge"
+    : "Free Delivery";
+
+  const deliveryText = useMemo(() => {
+    if (!shippingSettings.enabled) return "Free for all orders";
+
+    if (shippingSettings.freeShippingEnabled && !shippingSettings.noLimitMode) {
+      return `On orders over ${formatPrice(
+        shippingSettings.freeShippingMinAmount
+      )}`;
+    }
+
+    return `Dhaka ${formatPrice(
+      shippingSettings.insideDhakaCharge
+    )} / Outside ${formatPrice(shippingSettings.outsideDhakaCharge)}`;
+  }, [shippingSettings]);
 
   const suggestedProducts = useMemo(() => {
     const matched = products.filter((product) => {
@@ -535,7 +620,7 @@ export default function SkinQuizPage() {
           <div className="mx-auto grid max-w-[1820px] grid-cols-2 gap-3 rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] p-4 lg:grid-cols-5">
             {[
               [ShieldCheck, "100% Authentic", "Korean Skincare Products"],
-              [ShoppingBag, "Free Delivery", "on orders over ৳1,500"],
+              [Truck, deliveryTitle, deliveryText],
               [Target, "Secure Payment", "100% Safe Checkout"],
               [Leaf, "Easy Returns", "7 Days Return"],
               [Sparkles, "Personal Match", "Quiz based suggestion"],
@@ -547,7 +632,9 @@ export default function SkinQuizPage() {
                 <Icon size={22} className="text-[#0b3d2e]" />
 
                 <div>
-                  <h4 className="text-sm font-black text-[#102015]">{title}</h4>
+                  <h4 className="text-sm font-black text-[#102015]">
+                    {title}
+                  </h4>
                   <p className="text-xs text-[#4f5f49]">{text}</p>
                 </div>
               </div>

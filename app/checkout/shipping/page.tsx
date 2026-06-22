@@ -21,6 +21,100 @@ import { getWishlistCount } from "@/lib/wishlist";
 
 type CartProduct = ReturnType<typeof getCartItems>[number];
 
+type ShippingSettings = {
+  enabled: boolean;
+  freeShippingEnabled: boolean;
+  freeShippingMinAmount: number;
+  insideDhakaCharge: number;
+  outsideDhakaCharge: number;
+  noLimitMode: boolean;
+};
+
+const defaultShippingSettings: ShippingSettings = {
+  enabled: true,
+  freeShippingEnabled: true,
+  freeShippingMinAmount: 1500,
+  insideDhakaCharge: 80,
+  outsideDhakaCharge: 120,
+  noLimitMode: false,
+};
+
+const districtThanas: Record<string, string[]> = {
+  Dhaka: ["Dhanmondi", "Mirpur", "Uttara", "Gulshan", "Badda", "Mohammadpur", "Tejgaon", "Paltan", "Savar", "Keraniganj", "Dohar", "Nawabganj"],
+  Faridpur: ["Faridpur Sadar", "Alfadanga", "Bhanga", "Boalmari", "Charbhadrasan", "Madhukhali", "Nagarkanda", "Sadarpur", "Saltha"],
+  Gazipur: ["Gazipur Sadar", "Kaliakair", "Kaliganj", "Kapasia", "Sreepur"],
+  Gopalganj: ["Gopalganj Sadar", "Kashiani", "Kotalipara", "Muksudpur", "Tungipara"],
+  Kishoreganj: ["Kishoreganj Sadar", "Austagram", "Bajitpur", "Bhairab", "Hossainpur", "Itna", "Karimganj", "Katiadi", "Kuliarchar", "Mithamain", "Nikli", "Pakundia", "Tarail"],
+  Madaripur: ["Madaripur Sadar", "Kalkini", "Rajoir", "Shibchar", "Dasar"],
+  Manikganj: ["Manikganj Sadar", "Daulatpur", "Ghior", "Harirampur", "Saturia", "Shivalaya", "Singair"],
+  Munshiganj: ["Munshiganj Sadar", "Gazaria", "Lohajang", "Sirajdikhan", "Sreenagar", "Tongibari"],
+  Narayanganj: ["Narayanganj Sadar", "Araihazar", "Bandar", "Rupganj", "Sonargaon"],
+  Narsingdi: ["Narsingdi Sadar", "Belabo", "Monohardi", "Palash", "Raipura", "Shibpur"],
+  Rajbari: ["Rajbari Sadar", "Baliakandi", "Goalanda", "Pangsha", "Kalukhali"],
+  Shariatpur: ["Shariatpur Sadar", "Bhedarganj", "Damudya", "Gosairhat", "Naria", "Zajira"],
+  Tangail: ["Tangail Sadar", "Basail", "Bhuapur", "Delduar", "Dhanbari", "Ghatail", "Gopalpur", "Kalihati", "Madhupur", "Mirzapur", "Nagarpur", "Sakhipur"],
+
+  Chattogram: ["Kotwali", "Panchlaish", "Double Mooring", "Halishahar", "Pahartali", "Patenga", "Chandgaon", "Hathazari", "Sitakunda", "Raozan", "Rangunia", "Fatikchhari", "Mirsharai", "Sandwip", "Satkania", "Lohagara"],
+  CoxsBazar: ["Cox's Bazar Sadar", "Chakaria", "Kutubdia", "Maheshkhali", "Ramu", "Teknaf", "Ukhiya", "Pekua", "Eidgaon"],
+  Bandarban: ["Bandarban Sadar", "Thanchi", "Lama", "Naikhongchhari", "Ali Kadam", "Rowangchhari", "Ruma"],
+  Rangamati: ["Rangamati Sadar", "Baghaichhari", "Barkal", "Kawkhali", "Belaichhari", "Kaptai", "Juraichhari", "Langadu", "Naniarchar", "Rajasthali"],
+  Khagrachhari: ["Khagrachhari Sadar", "Dighinala", "Lakshmichhari", "Mahalchhari", "Manikchhari", "Matiranga", "Panchhari", "Ramgarh", "Guimara"],
+  Cumilla: ["Cumilla Sadar", "Barura", "Brahmanpara", "Burichang", "Chandina", "Chauddagram", "Daudkandi", "Debidwar", "Homna", "Laksam", "Monohorgonj", "Meghna", "Muradnagar", "Nangalkot", "Titas"],
+  Brahmanbaria: ["Brahmanbaria Sadar", "Akhaura", "Ashuganj", "Bancharampur", "Bijoynagar", "Kasba", "Nabinagar", "Nasirnagar", "Sarail"],
+  Chandpur: ["Chandpur Sadar", "Faridganj", "Haimchar", "Hajiganj", "Kachua", "Matlab North", "Matlab South", "Shahrasti"],
+  Feni: ["Feni Sadar", "Chhagalnaiya", "Daganbhuiyan", "Fulgazi", "Parshuram", "Sonagazi"],
+  Lakshmipur: ["Lakshmipur Sadar", "Raipur", "Ramganj", "Ramgati", "Kamalnagar"],
+  Noakhali: ["Noakhali Sadar", "Begumganj", "Chatkhil", "Companiganj", "Hatiya", "Kabirhat", "Senbagh", "Sonaimuri", "Subarnachar"],
+
+  Sylhet: ["Sylhet Sadar", "Beanibazar", "Bishwanath", "Companiganj", "Dakshin Surma", "Fenchuganj", "Golapganj", "Gowainghat", "Jaintiapur", "Kanaighat", "Osmani Nagar", "Zakiganj"],
+  Moulvibazar: ["Moulvibazar Sadar", "Barlekha", "Juri", "Kamalganj", "Kulaura", "Rajnagar", "Sreemangal"],
+  Habiganj: ["Habiganj Sadar", "Ajmiriganj", "Bahubal", "Baniachong", "Chunarughat", "Lakhai", "Madhabpur", "Nabiganj", "Shayestaganj"],
+  Sunamganj: ["Sunamganj Sadar", "Bishwamvarpur", "Chhatak", "Derai", "Dharamapasha", "Dowarabazar", "Jagannathpur", "Jamalganj", "Sulla", "Tahirpur", "Shantiganj"],
+
+  Rajshahi: ["Rajshahi Sadar", "Bagha", "Bagmara", "Charghat", "Durgapur", "Godagari", "Mohanpur", "Paba", "Puthia", "Tanore"],
+  Bogura: ["Bogura Sadar", "Adamdighi", "Dhunat", "Dhupchanchia", "Gabtali", "Kahaloo", "Nandigram", "Sariakandi", "Shajahanpur", "Sherpur", "Shibganj", "Sonatala"],
+  Joypurhat: ["Joypurhat Sadar", "Akkelpur", "Kalai", "Khetlal", "Panchbibi"],
+  Naogaon: ["Naogaon Sadar", "Atrai", "Badalgachhi", "Dhamoirhat", "Manda", "Mahadebpur", "Niamatpur", "Patnitala", "Porsha", "Raninagar", "Sapahar"],
+  Natore: ["Natore Sadar", "Bagatipara", "Baraigram", "Gurudaspur", "Lalpur", "Singra", "Naldanga"],
+  Chapainawabganj: ["Chapainawabganj Sadar", "Bholahat", "Gomastapur", "Nachole", "Shibganj"],
+  Pabna: ["Pabna Sadar", "Atgharia", "Bera", "Bhangura", "Chatmohar", "Faridpur", "Ishwardi", "Santhia", "Sujanagar"],
+  Sirajganj: ["Sirajganj Sadar", "Belkuchi", "Chauhali", "Kamarkhanda", "Kazipur", "Raiganj", "Shahjadpur", "Tarash", "Ullahpara"],
+
+  Khulna: ["Khulna Sadar", "Batiaghata", "Dacope", "Dighalia", "Dumuria", "Koyra", "Paikgachha", "Phultala", "Rupsa", "Terokhada"],
+  Bagerhat: ["Bagerhat Sadar", "Chitalmari", "Fakirhat", "Kachua", "Mollahat", "Mongla", "Morrelganj", "Rampal", "Sarankhola"],
+  Chuadanga: ["Chuadanga Sadar", "Alamdanga", "Damurhuda", "Jibannagar"],
+  Jashore: ["Jashore Sadar", "Abhaynagar", "Bagherpara", "Chaugachha", "Jhikargachha", "Keshabpur", "Manirampur", "Sharsha"],
+  Jhenaidah: ["Jhenaidah Sadar", "Harinakunda", "Kaliganj", "Kotchandpur", "Maheshpur", "Shailkupa"],
+  Kushtia: ["Kushtia Sadar", "Bheramara", "Daulatpur", "Khoksa", "Kumarkhali", "Mirpur"],
+  Magura: ["Magura Sadar", "Mohammadpur", "Shalikha", "Sreepur"],
+  Meherpur: ["Meherpur Sadar", "Gangni", "Mujibnagar"],
+  Narail: ["Narail Sadar", "Kalia", "Lohagara"],
+  Satkhira: ["Satkhira Sadar", "Assasuni", "Debhata", "Kalaroa", "Kaliganj", "Shyamnagar", "Tala"],
+
+  Barishal: ["Barishal Sadar", "Agailjhara", "Babuganj", "Bakerganj", "Banaripara", "Gaurnadi", "Hizla", "Mehendiganj", "Muladi", "Wazirpur"],
+  Barguna: ["Barguna Sadar", "Amtali", "Bamna", "Betagi", "Patharghata", "Taltali"],
+  Bhola: ["Bhola Sadar", "Borhanuddin", "Char Fasson", "Daulatkhan", "Lalmohan", "Manpura", "Tazumuddin"],
+  Jhalokati: ["Jhalokati Sadar", "Kathalia", "Nalchity", "Rajapur"],
+  Patuakhali: ["Patuakhali Sadar", "Bauphal", "Dashmina", "Dumki", "Galachipa", "Kalapara", "Mirzaganj", "Rangabali"],
+  Pirojpur: ["Pirojpur Sadar", "Bhandaria", "Kawkhali", "Mathbaria", "Nazirpur", "Nesarabad", "Indurkani"],
+
+  Rangpur: ["Rangpur Sadar", "Badarganj", "Gangachara", "Kaunia", "Mithapukur", "Pirgachha", "Pirganj", "Taraganj"],
+  Dinajpur: ["Dinajpur Sadar", "Birampur", "Birganj", "Birol", "Bochaganj", "Chirirbandar", "Fulbari", "Ghoraghat", "Hakimpur", "Kaharole", "Khansama", "Nawabganj", "Parbatipur"],
+  Gaibandha: ["Gaibandha Sadar", "Fulchhari", "Gobindaganj", "Palashbari", "Sadullapur", "Saghata", "Sundarganj"],
+  Kurigram: ["Kurigram Sadar", "Bhurungamari", "Char Rajibpur", "Chilmari", "Phulbari", "Nageshwari", "Rajarhat", "Raomari", "Ulipur"],
+  Lalmonirhat: ["Lalmonirhat Sadar", "Aditmari", "Hatibandha", "Kaliganj", "Patgram"],
+  Nilphamari: ["Nilphamari Sadar", "Dimla", "Domar", "Jaldhaka", "Kishoreganj", "Saidpur"],
+  Panchagarh: ["Panchagarh Sadar", "Atwari", "Boda", "Debiganj", "Tetulia"],
+  Thakurgaon: ["Thakurgaon Sadar", "Baliadangi", "Haripur", "Pirganj", "Ranisankail"],
+
+  Mymensingh: ["Mymensingh Sadar", "Bhaluka", "Dhobaura", "Fulbaria", "Gaffargaon", "Gauripur", "Haluaghat", "Ishwarganj", "Muktagachha", "Nandail", "Phulpur", "Trishal", "Tara Khanda"],
+  Jamalpur: ["Jamalpur Sadar", "Bakshiganj", "Dewanganj", "Islampur", "Madarganj", "Melandaha", "Sarishabari"],
+  Netrokona: ["Netrokona Sadar", "Atpara", "Barhatta", "Durgapur", "Kalmakanda", "Kendua", "Khaliajuri", "Madan", "Mohanganj", "Purbadhala"],
+  Sherpur: ["Sherpur Sadar", "Jhenaigati", "Nakla", "Nalitabari", "Sreebardi"],
+};
+
+const districts = Object.keys(districtThanas).sort();
+
 function safeImage(src?: string) {
   if (!src || src.trim() === "") return "/products/p1.png";
   const image = src.trim();
@@ -42,6 +136,10 @@ export default function CheckoutShippingPage() {
   const [cartCount, setCartCount] = useState(0);
   const [wishlistCount, setWishlistCount] = useState(0);
 
+  const [shippingSettings, setShippingSettings] = useState<ShippingSettings>(
+    defaultShippingSettings
+  );
+
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -49,9 +147,6 @@ export default function CheckoutShippingPage() {
   const [area, setArea] = useState("");
   const [address, setAddress] = useState("");
   const [note, setNote] = useState("");
-  const [shippingMethod, setShippingMethod] = useState<"standard" | "express">(
-    "standard"
-  );
   const [error, setError] = useState("");
 
   const loadCart = () => {
@@ -97,6 +192,7 @@ export default function CheckoutShippingPage() {
               firebaseId,
               id: Number(product.id || index + 1),
               name: product.name || "Unnamed Product",
+              slug: product.slug || "",
               image: safeImage(product.image),
               category: product.category || "Korean Skincare",
               price: Number(product.price || 0),
@@ -118,16 +214,53 @@ export default function CheckoutShippingPage() {
       loadCart();
     });
 
+    const shippingUnsubscribe = onValue(ref(database, "settings/shipping"), (snapshot) => {
+      const data = snapshot.val();
+
+      if (data) {
+        setShippingSettings({
+          enabled:
+            typeof data.enabled === "boolean"
+              ? data.enabled
+              : defaultShippingSettings.enabled,
+          freeShippingEnabled:
+            typeof data.freeShippingEnabled === "boolean"
+              ? data.freeShippingEnabled
+              : defaultShippingSettings.freeShippingEnabled,
+          freeShippingMinAmount:
+            Number(data.freeShippingMinAmount) ||
+            defaultShippingSettings.freeShippingMinAmount,
+          insideDhakaCharge:
+            Number(data.insideDhakaCharge) ||
+            defaultShippingSettings.insideDhakaCharge,
+          outsideDhakaCharge:
+            Number(data.outsideDhakaCharge) ||
+            defaultShippingSettings.outsideDhakaCharge,
+          noLimitMode:
+            typeof data.noLimitMode === "boolean"
+              ? data.noLimitMode
+              : defaultShippingSettings.noLimitMode,
+        });
+      }
+    });
+
     window.addEventListener("cartUpdated", loadCart);
     window.addEventListener("storage", loadCart);
 
     return () => {
       authUnsubscribe();
       productsUnsubscribe();
+      shippingUnsubscribe();
       window.removeEventListener("cartUpdated", loadCart);
       window.removeEventListener("storage", loadCart);
     };
   }, [router]);
+
+  useEffect(() => {
+    if (city && !districtThanas[city]?.includes(area)) {
+      setArea("");
+    }
+  }, [city, area]);
 
   const subtotal = useMemo(() => {
     return cartItems.reduce(
@@ -137,8 +270,41 @@ export default function CheckoutShippingPage() {
     );
   }, [cartItems]);
 
-  const shipping = shippingMethod === "express" ? 120 : subtotal >= 1500 ? 0 : 120;
+  const isInsideDhaka = city === "Dhaka";
+
+  const normalShippingCharge = isInsideDhaka
+    ? shippingSettings.insideDhakaCharge
+    : shippingSettings.outsideDhakaCharge;
+
+  const shipping = useMemo(() => {
+    if (subtotal === 0) return 0;
+    if (!shippingSettings.enabled) return 0;
+
+    if (
+      shippingSettings.freeShippingEnabled &&
+      !shippingSettings.noLimitMode &&
+      subtotal >= shippingSettings.freeShippingMinAmount
+    ) {
+      return 0;
+    }
+
+    return normalShippingCharge;
+  }, [subtotal, shippingSettings, normalShippingCharge]);
+
   const total = subtotal + shipping;
+
+  const deliveryText = !city
+    ? "Select district to calculate delivery charge."
+    : !shippingSettings.enabled
+    ? "Shipping is free for all orders."
+    : shipping === 0
+    ? "Free Delivery"
+    : `${isInsideDhaka ? "Dhaka" : "Outside Dhaka"} delivery charge ${formatPrice(shipping)}`;
+
+  const handleDistrictChange = (value: string) => {
+    setCity(value);
+    setArea("");
+  };
 
   const handleContinue = () => {
     setError("");
@@ -161,19 +327,25 @@ export default function CheckoutShippingPage() {
     }
 
     localStorage.setItem(
-      "zayyCheckoutShipping",
-      JSON.stringify({
-        fullName,
-        phone,
-        email,
-        city,
-        area,
-        address,
-        note,
-        shippingMethod,
-        shipping,
-      })
+      "zayy_shipping_area",
+      isInsideDhaka ? "insideDhaka" : "outsideDhaka"
     );
+
+    localStorage.setItem(
+  "zayyCheckoutShipping",
+  JSON.stringify({
+    fullName: fullName || "",
+    phone: phone || "",
+    email: email || "",
+    city: city || "",
+    area: area || "",
+    address: address || "",
+    note: note || "",
+    shippingArea: isInsideDhaka ? "insideDhaka" : "outsideDhaka",
+    shippingMethod: "standard",
+    shipping: Number(shipping || 0),
+  })
+);
 
     router.push("/checkout/payment");
   };
@@ -273,19 +445,34 @@ export default function CheckoutShippingPage() {
                     className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-4 py-3 text-sm outline-none sm:col-span-2"
                   />
 
-                  <input
+                  <select
                     value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="City / District *"
+                    onChange={(e) => handleDistrictChange(e.target.value)}
                     className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-4 py-3 text-sm outline-none"
-                  />
+                  >
+                    <option value="">Select District *</option>
+                    {districts.map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
+                  </select>
 
-                  <input
+                  <select
                     value={area}
                     onChange={(e) => setArea(e.target.value)}
-                    placeholder="Area / Thana *"
-                    className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-4 py-3 text-sm outline-none"
-                  />
+                    disabled={!city}
+                    className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-4 py-3 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="">
+                      {city ? "Select Thana / Upazila *" : "Select district first"}
+                    </option>
+                    {(districtThanas[city] || []).map((thana) => (
+                      <option key={thana} value={thana}>
+                        {thana}
+                      </option>
+                    ))}
+                  </select>
 
                   <textarea
                     value={address}
@@ -304,56 +491,21 @@ export default function CheckoutShippingPage() {
                   />
                 </div>
 
-                <h2 className="mb-4 mt-8 text-xl font-black text-[#102015]">
-                  Shipping Method
-                </h2>
-
-                <div className="grid gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShippingMethod("standard")}
-                    className={`rounded-[6px] border p-4 text-left ${
-                      shippingMethod === "standard"
-                        ? "border-[#0b3d2e] bg-[#f5f1e8]"
-                        : "border-[#0b3d2e]/10 bg-white"
-                    }`}
-                  >
-                    <div className="flex justify-between gap-4">
-                      <div>
-                        <p className="font-black text-[#102015]">
-                          Standard Shipping
-                        </p>
-                        <p className="text-sm text-[#4f5f49]">
-                          Free shipping on orders over ৳1,500
-                        </p>
-                      </div>
-                      <p className="font-black text-[#0b3d2e]">
-                        {subtotal >= 1500 ? "Free" : "৳120"}
+                <div className="mt-6 rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h2 className="text-lg font-black text-[#102015]">
+                        Delivery Charge
+                      </h2>
+                      <p className="mt-1 text-sm font-semibold text-[#4f5f49]">
+                        {deliveryText}
                       </p>
                     </div>
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setShippingMethod("express")}
-                    className={`rounded-[6px] border p-4 text-left ${
-                      shippingMethod === "express"
-                        ? "border-[#0b3d2e] bg-[#f5f1e8]"
-                        : "border-[#0b3d2e]/10 bg-white"
-                    }`}
-                  >
-                    <div className="flex justify-between gap-4">
-                      <div>
-                        <p className="font-black text-[#102015]">
-                          Express Shipping
-                        </p>
-                        <p className="text-sm text-[#4f5f49]">
-                          Get your order faster
-                        </p>
-                      </div>
-                      <p className="font-black text-[#0b3d2e]">৳120</p>
-                    </div>
-                  </button>
+                    <p className="text-xl font-black text-[#0b3d2e]">
+                      {shipping === 0 ? "Free" : formatPrice(shipping)}
+                    </p>
+                  </div>
                 </div>
 
                 {error && <p className="mt-5 text-sm text-red-500">{error}</p>}
@@ -374,10 +526,7 @@ export default function CheckoutShippingPage() {
                 <h2 className="text-xl font-black text-[#102015]">
                   Order Summary
                 </h2>
-                <Link
-                  href="/cart"
-                  className="text-sm font-bold text-[#0b3d2e]"
-                >
+                <Link href="/cart" className="text-sm font-bold text-[#0b3d2e]">
                   Edit Cart
                 </Link>
               </div>

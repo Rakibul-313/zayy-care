@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { onValue, ref } from "firebase/database";
 import {
   Heart,
   Headphones,
@@ -17,6 +18,7 @@ import {
 
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { database } from "@/firebase/config";
 
 import { products } from "@/data/products";
 import type { Product } from "@/data/products";
@@ -38,23 +40,33 @@ type WishlistProduct = Product & {
   firebaseId?: string;
 };
 
+type ShippingSettings = {
+  enabled: boolean;
+  freeShippingEnabled: boolean;
+  freeShippingMinAmount: number;
+  insideDhakaCharge: number;
+  outsideDhakaCharge: number;
+  noLimitMode: boolean;
+};
+
+const defaultShippingSettings: ShippingSettings = {
+  enabled: true,
+  freeShippingEnabled: true,
+  freeShippingMinAmount: 1500,
+  insideDhakaCharge: 80,
+  outsideDhakaCharge: 120,
+  noLimitMode: false,
+};
+
 function formatPrice(price?: number) {
   return `৳${taka.format(Number(price || 0))}`;
 }
 
 function safeImage(src?: string) {
   if (!src || src.trim() === "") return "/products/p1.png";
-
   const image = src.trim();
-
-  if (image.startsWith("http://") || image.startsWith("https://")) {
-    return image;
-  }
-
-  if (image.startsWith("/")) {
-    return image;
-  }
-
+  if (image.startsWith("http://") || image.startsWith("https://")) return image;
+  if (image.startsWith("/")) return image;
   return `/${image}`;
 }
 
@@ -168,13 +180,14 @@ export default function WishlistPage() {
   const [wishlistItems, setWishlistItems] = useState<WishlistProduct[]>([]);
   const [cartCount, setCartCount] = useState(0);
   const [wishlistCount, setWishlistCount] = useState(0);
+  const [shippingSettings, setShippingSettings] =
+    useState<ShippingSettings>(defaultShippingSettings);
 
   const loadWishlist = () => {
     const wishlist = getWishlist();
-    const firebaseProducts = getFirebaseProducts() as unknown as WishlistProduct[];
+    const firebaseProducts =
+      getFirebaseProducts() as unknown as WishlistProduct[];
     const localProducts = products as unknown as WishlistProduct[];
-
-    const allProducts = [...firebaseProducts, ...localProducts];
 
     const items = wishlist
       .map((id) => {
@@ -194,11 +207,48 @@ export default function WishlistPage() {
   useEffect(() => {
     queueMicrotask(loadWishlist);
 
+    const shippingUnsubscribe = onValue(
+      ref(database, "settings/shipping"),
+      (snapshot) => {
+        const data = snapshot.val();
+
+        if (!data) {
+          setShippingSettings(defaultShippingSettings);
+          return;
+        }
+
+        setShippingSettings({
+          enabled:
+            typeof data.enabled === "boolean"
+              ? data.enabled
+              : defaultShippingSettings.enabled,
+          freeShippingEnabled:
+            typeof data.freeShippingEnabled === "boolean"
+              ? data.freeShippingEnabled
+              : defaultShippingSettings.freeShippingEnabled,
+          freeShippingMinAmount:
+            Number(data.freeShippingMinAmount) ||
+            defaultShippingSettings.freeShippingMinAmount,
+          insideDhakaCharge:
+            Number(data.insideDhakaCharge) ||
+            defaultShippingSettings.insideDhakaCharge,
+          outsideDhakaCharge:
+            Number(data.outsideDhakaCharge) ||
+            defaultShippingSettings.outsideDhakaCharge,
+          noLimitMode:
+            typeof data.noLimitMode === "boolean"
+              ? data.noLimitMode
+              : defaultShippingSettings.noLimitMode,
+        });
+      }
+    );
+
     window.addEventListener("wishlistUpdated", loadWishlist);
     window.addEventListener("cartUpdated", loadWishlist);
     window.addEventListener("storage", loadWishlist);
 
     return () => {
+      shippingUnsubscribe();
       window.removeEventListener("wishlistUpdated", loadWishlist);
       window.removeEventListener("cartUpdated", loadWishlist);
       window.removeEventListener("storage", loadWishlist);
@@ -233,6 +283,22 @@ export default function WishlistPage() {
   };
 
   const totalItems = useMemo(() => wishlistItems.length, [wishlistItems]);
+
+  const deliveryTitle = shippingSettings.enabled ? "Delivery Charge" : "Free Delivery";
+
+  const deliveryText = useMemo(() => {
+    if (!shippingSettings.enabled) return "Free for all orders";
+
+    if (shippingSettings.freeShippingEnabled && !shippingSettings.noLimitMode) {
+      return `On orders over ${formatPrice(
+        shippingSettings.freeShippingMinAmount
+      )}`;
+    }
+
+    return `Dhaka ${formatPrice(
+      shippingSettings.insideDhakaCharge
+    )} / Outside ${formatPrice(shippingSettings.outsideDhakaCharge)}`;
+  }, [shippingSettings]);
 
   return (
     <>
@@ -354,7 +420,7 @@ export default function WishlistPage() {
           <div className="mx-auto grid max-w-[1820px] grid-cols-2 gap-3 rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] p-4 lg:grid-cols-5">
             {[
               [ShieldCheck, "100% Authentic", "Genuine Korean Products"],
-              [Truck, "Free Delivery", "On orders over ৳1,500"],
+              [Truck, deliveryTitle, deliveryText],
               [ShoppingBag, "Secure Payment", "100% Safe Checkout"],
               [RefreshCcw, "Easy Returns", "Hassle-free returns"],
               [Headphones, "24/7 Support", "We’re here to help"],

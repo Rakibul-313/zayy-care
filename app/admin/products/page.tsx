@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { remove } from "firebase/database";
 import { onValue, push, ref, set, update } from "firebase/database";
 import { database } from "@/firebase/config";
 import {
@@ -15,6 +16,7 @@ import {
   Package,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
   Star,
   Trash2,
@@ -179,6 +181,7 @@ function formatDate(value?: number) {
 }
 
 function productStatus(product: AdminProduct) {
+  if (product.deleted === true) return "Deleted";
   if (Number(product.stock || 0) <= 0) return "Out of Stock";
   if (product.active === false) return "Draft";
   return "Published";
@@ -187,6 +190,7 @@ function productStatus(product: AdminProduct) {
 function statusClass(status: string) {
   if (status === "Published") return "bg-green-100 text-green-700";
   if (status === "Draft") return "bg-orange-100 text-orange-700";
+  if (status === "Deleted") return "bg-red-100 text-red-700";
   return "bg-red-100 text-red-700";
 }
 
@@ -299,6 +303,7 @@ export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"active" | "trash">("active");
 
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(
@@ -360,7 +365,6 @@ export default function AdminProductsPage() {
           id,
           ...(value as Omit<AdminProduct, "id">),
         }))
-        .filter((product) => product.deleted !== true)
         .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
 
       setProducts(formatted);
@@ -398,12 +402,28 @@ export default function AdminProductsPage() {
     };
   }, []);
 
+  const visibleProducts = useMemo(() => {
+    return products.filter((product) =>
+      viewMode === "trash" ? product.deleted === true : product.deleted !== true
+    );
+  }, [products, viewMode]);
+
+  const trashCount = useMemo(
+    () => products.filter((product) => product.deleted === true).length,
+    [products]
+  );
+
+  const activeCount = useMemo(
+    () => products.filter((product) => product.deleted !== true).length,
+    [products]
+  );
+
   const filteredProducts = useMemo(() => {
     const keyword = search.toLowerCase().trim();
 
-    if (!keyword) return products;
+    if (!keyword) return visibleProducts;
 
-    return products.filter((product) => {
+    return visibleProducts.filter((product) => {
       const text = `
         ${product.name || ""}
         ${product.brand || ""}
@@ -415,21 +435,23 @@ export default function AdminProductsPage() {
 
       return text.includes(keyword);
     });
-  }, [products, search]);
+  }, [visibleProducts, search]);
 
   const stats = useMemo(() => {
-    const total = products.length;
-    const published = products.filter(
+    const activeProducts = products.filter((item) => item.deleted !== true);
+
+    const total = activeProducts.length;
+    const published = activeProducts.filter(
       (item) => productStatus(item) === "Published"
     ).length;
-    const drafts = products.filter((item) => productStatus(item) === "Draft")
+    const drafts = activeProducts.filter((item) => productStatus(item) === "Draft")
       .length;
-    const outStock = products.filter(
+    const outStock = activeProducts.filter(
       (item) => productStatus(item) === "Out of Stock"
     ).length;
-    const flashSaleCount = products.filter((item) => item.flashSale === true)
+    const flashSaleCount = activeProducts.filter((item) => item.flashSale === true)
       .length;
-    const revenue = products.reduce(
+    const revenue = activeProducts.reduce(
       (sum, item) => sum + Number(item.price || 0) * Number(item.sold || 0),
       0
     );
@@ -467,7 +489,7 @@ export default function AdminProductsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search]);
+  }, [search, viewMode]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -701,17 +723,60 @@ export default function AdminProductsPage() {
 
   const handleDeleteProduct = async (product: AdminProduct) => {
     const confirmDelete = confirm(
-      `Are you sure you want to delete "${product.name}"?`
+      `Move "${product.name}" to Recycle Bin?`
     );
 
     if (!confirmDelete) return;
 
-    await update(ref(database, `products/${product.id}`), {
-      deleted: true,
-      active: false,
-      deletedAt: Date.now(),
-      updatedAt: Date.now(),
-    });
+    try {
+      await update(ref(database, `products/${product.id}`), {
+        deleted: true,
+        active: false,
+        deletedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+
+      alert("Product moved to Recycle Bin");
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Failed to move product");
+    }
+  };
+
+  const handleRestoreProduct = async (product: AdminProduct) => {
+    const confirmRestore = confirm(`Restore "${product.name}"?`);
+
+    if (!confirmRestore) return;
+
+    try {
+      await update(ref(database, `products/${product.id}`), {
+        deleted: false,
+        active: true,
+        deletedAt: 0,
+        updatedAt: Date.now(),
+      });
+
+      alert("Product restored successfully");
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Failed to restore product");
+    }
+  };
+
+  const handlePermanentDeleteProduct = async (product: AdminProduct) => {
+    const confirmDelete = confirm(
+      `Permanently delete "${product.name}" from Firebase? This cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      await remove(ref(database, `products/${product.id}`));
+      alert("Product permanently deleted");
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Failed to delete product");
+    }
   };
 
   const toggleCOD = async (product: AdminProduct) => {
@@ -819,13 +884,42 @@ export default function AdminProductsPage() {
         </div>
       </section>
 
-      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-6">
+      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-7">
         <StatCard title="Total Products" value={stats.total} icon={Package} />
         <StatCard title="Published" value={stats.published} icon={CheckCircle2} />
         <StatCard title="Drafts" value={stats.drafts} icon={FileText} />
         <StatCard title="Out of Stock" value={stats.outStock} icon={XCircle} />
         <StatCard title="Flash Sale" value={stats.flashSaleCount} icon={Flame} />
+        <StatCard title="Recycle Bin" value={trashCount} icon={Trash2} />
         <StatCard title="Total Revenue" value={money(stats.revenue)} icon={BadgeDollarSign} />
+      </section>
+
+      <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-2 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setViewMode("active")}
+            className={`rounded-[6px] px-5 py-3 text-sm font-black transition ${
+              viewMode === "active"
+                ? "bg-[#003f2a] text-white"
+                : "bg-[#f5f1e8] text-[#003f2a]"
+            }`}
+          >
+            Active Products ({activeCount})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewMode("trash")}
+            className={`rounded-[6px] px-5 py-3 text-sm font-black transition ${
+              viewMode === "trash"
+                ? "bg-red-600 text-white"
+                : "bg-red-50 text-red-700"
+            }`}
+          >
+            Recycle Bin ({trashCount})
+          </button>
+        </div>
       </section>
 
       <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 shadow-[0_8px_24px_rgba(11,61,46,0.06)]">
@@ -847,7 +941,7 @@ export default function AdminProductsPage() {
       >
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-bold text-[#4f5f49]">
-            Showing {showingFrom} to {showingTo} of {filteredProducts.length} products
+            {viewMode === "trash" ? "Recycle Bin" : "Active Products"} • Showing {showingFrom} to {showingTo} of {filteredProducts.length} products
           </p>
 
           <button
@@ -865,7 +959,7 @@ export default function AdminProductsPage() {
           <div className="py-12 text-center">
             <Package className="mx-auto text-[#003f2a]" size={44} />
             <h2 className="mt-4 text-2xl font-black text-[#102015]">
-              No products found
+              {viewMode === "trash" ? "Recycle Bin is empty" : "No products found"}
             </h2>
           </div>
         ) : (
@@ -972,77 +1066,103 @@ export default function AdminProductsPage() {
 
                         <td>
                           <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => toggleCOD(product)}
-                              title="COD ON/OFF"
-                              className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
-                                product.codAvailable === false
-                                  ? "bg-red-50 text-red-600"
-                                  : "bg-green-50 text-green-600"
-                              }`}
-                            >
-                              <Eye size={13} />
-                              COD
-                            </button>
+                            {viewMode === "trash" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRestoreProduct(product)}
+                                  title="Restore Product"
+                                  className="flex h-8 items-center gap-1 rounded-[6px] bg-green-50 px-3 text-[10px] font-black text-green-700"
+                                >
+                                  <RotateCcw size={13} />
+                                  Restore
+                                </button>
 
-                            <button
-                              type="button"
-                              onClick={() => toggleFeatured(product)}
-                              title="Featured ON/OFF"
-                              className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
-                                product.featured
-                                  ? "bg-green-50 text-green-600"
-                                  : "bg-[#f5f1e8] text-[#0b3d2e]"
-                              }`}
-                            >
-                              <Star size={13} />
-                              Feature
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePermanentDeleteProduct(product)}
+                                  title="Permanently Delete"
+                                  className="flex h-8 items-center gap-1 rounded-[6px] bg-red-600 px-3 text-[10px] font-black text-white"
+                                >
+                                  <Trash2 size={13} />
+                                  Delete Forever
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleCOD(product)}
+                                  title="COD ON/OFF"
+                                  className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
+                                    product.codAvailable === false
+                                      ? "bg-red-50 text-red-600"
+                                      : "bg-green-50 text-green-600"
+                                  }`}
+                                >
+                                  <Eye size={13} />
+                                  COD
+                                </button>
 
-                            <button
-                              type="button"
-                              onClick={() => toggleBestSeller(product)}
-                              title="Best Seller ON/OFF"
-                              className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
-                                product.bestSeller
-                                  ? "bg-green-50 text-green-600"
-                                  : "bg-[#f5f1e8] text-[#0b3d2e]"
-                              }`}
-                            >
-                              <CheckCircle2 size={13} />
-                              Best
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleFeatured(product)}
+                                  title="Featured ON/OFF"
+                                  className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
+                                    product.featured
+                                      ? "bg-green-50 text-green-600"
+                                      : "bg-[#f5f1e8] text-[#0b3d2e]"
+                                  }`}
+                                >
+                                  <Star size={13} />
+                                  Feature
+                                </button>
 
-                            <button
-                              type="button"
-                              onClick={() => toggleFlashSale(product)}
-                              title="Flash Sale ON/OFF"
-                              className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
-                                product.flashSale
-                                  ? "bg-red-50 text-red-700"
-                                  : "bg-[#f5f1e8] text-[#0b3d2e]"
-                              }`}
-                            >
-                              <Flame size={13} />
-                              Flash
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleBestSeller(product)}
+                                  title="Best Seller ON/OFF"
+                                  className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
+                                    product.bestSeller
+                                      ? "bg-green-50 text-green-600"
+                                      : "bg-[#f5f1e8] text-[#0b3d2e]"
+                                  }`}
+                                >
+                                  <CheckCircle2 size={13} />
+                                  Best
+                                </button>
 
-                            <button
-                              onClick={() => openEditModal(product)}
-                              className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-yellow-50 text-yellow-700"
-                              title="Edit Product"
-                            >
-                              <Pencil size={15} />
-                            </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleFlashSale(product)}
+                                  title="Flash Sale ON/OFF"
+                                  className={`flex h-8 items-center gap-1 rounded-[6px] px-2 text-[10px] font-black ${
+                                    product.flashSale
+                                      ? "bg-red-50 text-red-700"
+                                      : "bg-[#f5f1e8] text-[#0b3d2e]"
+                                  }`}
+                                >
+                                  <Flame size={13} />
+                                  Flash
+                                </button>
 
-                            <button
-                              onClick={() => handleDeleteProduct(product)}
-                              className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-red-50 text-red-700"
-                              title="Delete Product"
-                            >
-                              <Trash2 size={15} />
-                            </button>
+                                <button
+                                  onClick={() => openEditModal(product)}
+                                  className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-yellow-50 text-yellow-700"
+                                  title="Edit Product"
+                                >
+                                  <Pencil size={15} />
+                                </button>
+
+                                <button
+                                  onClick={() => handleDeleteProduct(product)}
+                                  className="flex h-8 w-8 items-center justify-center rounded-[6px] bg-red-50 text-red-700"
+                                  title="Move to Recycle Bin"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
