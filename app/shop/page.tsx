@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
@@ -180,7 +180,7 @@ function ShopProductCard({
   );
 }
 
-export default function ShopPage() {
+function ShopContent() {
   const [products, setProducts] = useState<ShopProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -986,5 +986,13 @@ export default function ShopPage() {
 
       {mobileFilterDrawer}
     </>
+    
+  );
+}
+export default function ShopPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#fafaf7]" />}>
+      <ShopContent />
+    </Suspense>
   );
 }
