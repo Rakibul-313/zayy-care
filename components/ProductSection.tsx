@@ -161,25 +161,7 @@ export default function ProductSection() {
               <ArrowRight size={16} />
             </Link>
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                aria-label="Scroll products left"
-                onClick={scrollLeft}
-                className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-[#0b3d2e] text-white shadow-[0_10px_24px_rgba(11,61,46,0.22)] transition-all duration-300 hover:-translate-y-1 hover:bg-[#062a18] hover:shadow-[0_18px_40px_rgba(11,61,46,0.35)]"
-              >
-                <ArrowLeft size={18} />
-              </button>
-
-              <button
-                type="button"
-                aria-label="Scroll products right"
-                onClick={scrollRight}
-                className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-[#0b3d2e] text-white shadow-[0_10px_24px_rgba(11,61,46,0.22)] transition-all duration-300 hover:-translate-y-1 hover:bg-[#062a18] hover:shadow-[0_18px_40px_rgba(11,61,46,0.35)]"
-              >
-                <ArrowRight size={18} />
-              </button>
-            </div>
+            
           </div>
         </div>
 

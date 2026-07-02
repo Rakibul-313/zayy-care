@@ -1142,3 +1142,21 @@ body {
   color: #f5f1e8 !important;
   stroke: #f5f1e8 !important;
 }
+@keyframes zayyTickerMove {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.zayy-ticker {
+  animation-name: zayyTickerMove;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.zayy-ticker:hover {
+  animation-play-state: paused;
+}

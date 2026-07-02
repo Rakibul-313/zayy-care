@@ -95,11 +95,11 @@ export default function CategoryCards() {
                 href={item.href}
                 className="group flex w-[86px] shrink-0 flex-col items-center text-center sm:w-[105px]"
               >
-                <div className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-[#f5f1e8] shadow-[0_10px_28px_rgba(11,61,46,0.08)] transition group-hover:-translate-y-1 sm:h-[92px] sm:w-[92px]">
+                <div className="h-[76px] w-[76px] overflow-hidden rounded-full bg-[#f5f1e8] shadow-[0_10px_28px_rgba(11,61,46,0.08)] transition group-hover:-translate-y-1 sm:h-[92px] sm:w-[92px]">
                   <img
                     src={item.image}
                     alt={item.title}
-                    className="h-[56px] w-[56px] object-contain sm:h-[68px] sm:w-[68px]"
+                    className="h-full w-full object-cover"
                   />
                 </div>
 
