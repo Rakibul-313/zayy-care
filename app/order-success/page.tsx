@@ -2,13 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CheckCircle, Home, ShoppingBag, ClipboardList } from "lucide-react";
 
-export default function OrderSuccessPage() {
+function OrderSuccessContent() {
   const searchParams = useSearchParams();
   const orderNumber = searchParams.get("order");
 
@@ -88,26 +89,17 @@ export default function OrderSuccessPage() {
             </p>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              <Link
-                href="/shop"
-                className="flex h-12 items-center justify-center gap-2 rounded-[6px] bg-[#0b3d2e] text-sm font-black uppercase text-white shadow-[0_8px_18px_rgba(11,61,46,0.20)]"
-              >
+              <Link href="/shop" className="flex h-12 items-center justify-center gap-2 rounded-[6px] bg-[#0b3d2e] text-sm font-black uppercase text-white shadow-[0_8px_18px_rgba(11,61,46,0.20)]">
                 <ShoppingBag size={17} />
                 Continue Shopping
               </Link>
 
-              <Link
-                href="/profile/orders"
-                className="flex h-12 items-center justify-center gap-2 rounded-[6px] border border-[#0b3d2e]/15 bg-[#fafaf7] text-sm font-black text-[#0b3d2e]"
-              >
+              <Link href="/profile/orders" className="flex h-12 items-center justify-center gap-2 rounded-[6px] border border-[#0b3d2e]/15 bg-[#fafaf7] text-sm font-black text-[#0b3d2e]">
                 <ClipboardList size={17} />
                 View Orders
               </Link>
 
-              <Link
-                href="/"
-                className="flex h-12 items-center justify-center gap-2 rounded-[6px] border border-[#0b3d2e]/15 bg-[#fafaf7] text-sm font-black text-[#0b3d2e]"
-              >
+              <Link href="/" className="flex h-12 items-center justify-center gap-2 rounded-[6px] border border-[#0b3d2e]/15 bg-[#fafaf7] text-sm font-black text-[#0b3d2e]">
                 <Home size={17} />
                 Back Home
               </Link>
@@ -118,5 +110,13 @@ export default function OrderSuccessPage() {
         <Footer />
       </motion.main>
     </>
+  );
+}
+
+export default function OrderSuccessPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#fafaf7]" />}>
+      <OrderSuccessContent />
+    </Suspense>
   );
 }
