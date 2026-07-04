@@ -28,29 +28,6 @@ export const metadata: Metadata = {
   authors: [{ name: "ZAYY Care" }],
   creator: "ZAYY Care",
   publisher: "ZAYY Care",
-  openGraph: {
-    title: "ZAYY Care | Premium Korean Skincare",
-    description:
-      "Premium authentic Korean skincare products for healthy, glowing skin.",
-    url: "https://zayycare.com",
-    siteName: "ZAYY Care",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "ZAYY Care Korean Skincare",
-      },
-    ],
-    locale: "en_BD",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "ZAYY Care | Premium Korean Skincare",
-    description: "Shop authentic Korean skincare products in Bangladesh.",
-    images: ["/og-image.png"],
-  },
   icons: {
     icon: "/favicon.png",
     apple: "/logo.png",

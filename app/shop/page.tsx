@@ -67,6 +67,7 @@ const defaultShippingSettings: ShippingSettings = {
 
 const taka = new Intl.NumberFormat("en-BD", { maximumFractionDigits: 0 });
 const PRODUCTS_PER_PAGE = 24;
+const SHOP_CACHE_KEY = "zayy_shop_products_cache";
 
 function formatPrice(price?: number) {
   return `৳${taka.format(Number(price || 0))}`;
@@ -95,15 +96,15 @@ function ShopProductCard({
   onCart: () => void;
 }) {
   return (
-    <article className="group relative w-full min-w-0 overflow-hidden rounded-[12px] border border-[#e8e3d7] bg-white shadow-[0_10px_28px_rgba(11,61,46,0.09)] transition hover:-translate-y-1 hover:shadow-[0_18px_42px_rgba(11,61,46,0.14)]">
+    <article className="group relative w-full max-w-full min-w-0 overflow-hidden rounded-[8px] border border-[#e8e3d7] bg-white shadow-[0_10px_28px_rgba(11,61,46,0.09)] transition hover:-translate-y-1 hover:shadow-[0_18px_42px_rgba(11,61,46,0.14)] sm:rounded-[12px]">
       <Link
         href={`/product/${(product as any).slug || product.id}`}
-        className="relative flex aspect-[27/23] items-center justify-center overflow-hidden bg-[#f5f1e8]"
+        className="relative flex aspect-square items-center justify-center overflow-hidden bg-[#f5f1e8] sm:aspect-[27/23]"
       >
         <img
           src={safeImage(product.image)}
           alt={product.name}
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          className="h-full w-full object-contain p-3 transition duration-500 group-hover:scale-105 sm:object-cover sm:p-0"
         />
       </Link>
 
@@ -123,19 +124,19 @@ function ShopProductCard({
         <Heart size={14} fill={liked ? "currentColor" : "none"} />
       </button>
 
-      <div className="p-2.5 sm:p-3">
-        <p className="mb-1 text-[9px] font-black uppercase tracking-wide text-[#4f7a3a] sm:text-[10px]">
+      <div className="p-2 sm:p-3">
+        <p className="mb-1 truncate text-[8px] font-black uppercase tracking-wide text-[#4f7a3a] sm:text-[10px]">
           {product.brand}
         </p>
 
         <Link
           href={`/product/${(product as any).slug || product.id}`}
-          className="line-clamp-2 min-h-[34px] text-[12px] font-bold leading-snug text-[#102015] hover:text-[#0b3d2e] sm:min-h-[36px] sm:text-[13px]"
+          className="line-clamp-2 min-h-[32px] break-words text-[11px] font-bold leading-snug text-[#102015] hover:text-[#0b3d2e] sm:min-h-[36px] sm:text-[13px]"
         >
           {product.name}
         </Link>
 
-        <div className="mt-2 flex items-center gap-1">
+        <div className="mt-1.5 flex items-center gap-1 sm:mt-2">
           <div className="flex items-center text-[#e3a51a]">
             {[1, 2, 3, 4, 5].map((star) => (
               <Star
@@ -156,7 +157,7 @@ function ShopProductCard({
         </div>
 
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          <span className="text-[16px] font-black text-[#102015] sm:text-[17px]">
+          <span className="text-[14px] font-black text-[#102015] sm:text-[17px]">
             {formatPrice(product.price)}
           </span>
 
@@ -170,7 +171,7 @@ function ShopProductCard({
         <button
           type="button"
           onClick={onCart}
-          className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-[6px] bg-[linear-gradient(90deg,#062a18_0%,#0b3d2e_50%,#062a18_100%)] text-[11px] font-black uppercase text-white shadow-[0_8px_18px_rgba(11,61,46,0.20)] transition hover:bg-[#062a18] sm:text-[12px]"
+          className="mt-2.5 flex h-8 w-full items-center justify-center gap-1.5 rounded-[6px] bg-[linear-gradient(90deg,#062a18_0%,#0b3d2e_50%,#062a18_100%)] text-[9px] font-black uppercase text-white shadow-[0_8px_18px_rgba(11,61,46,0.20)] transition hover:bg-[#062a18] sm:mt-3 sm:h-9 sm:gap-2 sm:text-[12px]"
         >
           Add to Cart
           <ShoppingBag size={14} />
@@ -216,19 +217,52 @@ function ShopContent() {
   }, []);
 
   useEffect(() => {
+    const cached = sessionStorage.getItem(SHOP_CACHE_KEY);
+
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as ShopProduct[];
+
+        setProducts(parsed);
+        setMaxPrice(Math.max(...parsed.map((p) => p.price || 0), 1000));
+
+        saveFirebaseProducts(
+          parsed.map((product) => ({
+            id: product.id,
+            slug: product.slug,
+            firebaseId: product.firebaseId,
+            name: product.name,
+            image: product.image,
+            category: product.category,
+            price: product.price,
+            oldPrice: product.oldPrice,
+            stock: product.stock,
+            quantity: 0,
+          }))
+        );
+
+        setLoading(false);
+      } catch {
+        sessionStorage.removeItem(SHOP_CACHE_KEY);
+      }
+    }
+
     const unsubscribe = onValue(ref(database, "products"), (snapshot) => {
       const data = snapshot.val();
 
       if (!data) {
         setProducts([]);
         saveFirebaseProducts([]);
+        sessionStorage.removeItem(SHOP_CACHE_KEY);
         setLoading(false);
         return;
       }
 
       const formatted: ShopProduct[] = Object.entries(data)
         .map(([firebaseId, value], index) => {
-          const product = value as Partial<ShopProduct>;
+          const product = value as Partial<ShopProduct> & {
+            imageUrl?: string;
+          };
 
           return {
             firebaseId,
@@ -238,7 +272,7 @@ function ShopContent() {
             brand: product.brand || "ZAYY Care",
             category: product.category || "Korean Skincare",
             productType: product.productType || "",
-            image: safeImage(product.image),
+            image: safeImage(product.image || product.imageUrl),
             price: Number(product.price || 0),
             oldPrice: Number(product.oldPrice || product.price || 0),
             sale: product.sale || "New",
@@ -250,12 +284,11 @@ function ShopContent() {
             bestSeller: product.bestSeller === true,
           };
         })
-        .filter(
-          (product) => product.deleted !== true && product.active !== false
-        );
+        .filter((product) => product.deleted !== true && product.active !== false);
 
       setProducts(formatted);
       setMaxPrice(Math.max(...formatted.map((p) => p.price || 0), 1000));
+      sessionStorage.setItem(SHOP_CACHE_KEY, JSON.stringify(formatted));
 
       saveFirebaseProducts(
         formatted.map((product) => ({
@@ -677,8 +710,8 @@ function ShopContent() {
           </div>
         </section>
 
-        <section className="px-4 py-8 sm:px-8 lg:px-14">
-          <div className="mx-auto grid max-w-[1820px] gap-8 lg:grid-cols-[250px_1fr]">
+        <section className="px-3 py-6 sm:px-8 sm:py-8 lg:px-14">
+          <div className="mx-auto grid max-w-[1820px] min-w-0 gap-6 sm:gap-8 lg:grid-cols-[250px_1fr]">
             <aside className="hidden lg:block">
               <div className="sticky top-[120px] rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5">
                 <div className="mb-5 flex items-center justify-between border-b border-[#0b3d2e]/10 pb-4">
@@ -801,8 +834,8 @@ function ShopContent() {
               </div>
             </aside>
 
-            <div id="shop-products">
-              <div className="mb-5 rounded-[6px] border border-[#0b3d2e]/10 bg-white p-4">
+            <div id="shop-products" className="min-w-0">
+              <div className="mb-4 rounded-[6px] border border-[#0b3d2e]/10 bg-white p-3 sm:mb-5 sm:p-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <p className="text-sm text-[#4f5f49]">
                     {loading
@@ -813,7 +846,7 @@ function ShopContent() {
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
-                    className="rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-4 py-2 text-sm font-semibold outline-none"
+                    className="w-full rounded-[6px] border border-[#0b3d2e]/10 bg-[#fafaf7] px-3 py-2 text-sm font-semibold outline-none sm:w-auto sm:px-4"
                   >
                     <option value="popular">Sort by: Popular</option>
                     <option value="latest">Sort by: Latest</option>
@@ -863,7 +896,7 @@ function ShopContent() {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-[repeat(2,minmax(150px,1fr))] gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+                  <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5 xl:grid-cols-6">
                     {paginatedProducts.map((product) => (
                       <ShopProductCard
                         key={product.firebaseId || product.id}
@@ -956,7 +989,7 @@ function ShopContent() {
           </div>
         </section>
 
-        <section className="px-4 pb-10 sm:px-8 lg:px-14">
+        <section className="px-3 pb-10 sm:px-8 lg:px-14">
           <div className="mx-auto grid max-w-[1820px] grid-cols-2 gap-3 rounded-[6px] border border-[#0b3d2e]/10 bg-[#f5f1e8] p-4 lg:grid-cols-5">
             {[
               [ShieldCheck, "100% Authentic", "Genuine Korean Products"],
