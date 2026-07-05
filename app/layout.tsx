@@ -29,9 +29,10 @@ export const metadata: Metadata = {
   creator: "ZAYY Care",
   publisher: "ZAYY Care",
   icons: {
-    icon: "/favicon.png",
-    apple: "/logo.png",
-  },
+  icon: "/favicon.png",
+  shortcut: "/favicon.png",
+  apple: "/logo.png",
+},
 };
 
 export default function RootLayout({
