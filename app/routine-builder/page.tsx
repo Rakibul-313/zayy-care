@@ -279,10 +279,10 @@ export default function RoutineBuilderPage() {
         initial={{ opacity: 0, y: 28, scale: 0.98, filter: "blur(10px)" }}
         animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
         transition={{ type: "spring", stiffness: 70, damping: 20, mass: 0.9 }}
-        className="min-h-screen bg-[#fafaf7]"
+        className="min-h-screen overflow-x-hidden bg-[#fafaf7]"
       >
         <section className="px-4 pt-[105px] sm:px-8 lg:px-14 lg:pt-[115px]">
-          <div className="mx-auto max-w-[1820px] py-8 text-center">
+          <div className="mx-auto w-full max-w-[1820px] py-8 text-center">
             <h1 className="dream-font text-[44px] leading-none text-[#0b3d2e] sm:text-[58px]">
               Routine Builder
             </h1>
@@ -290,7 +290,7 @@ export default function RoutineBuilderPage() {
               Build your perfect skincare routine based on your skin type, concerns and goals.
             </p>
 
-            <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-7 grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 [Sparkles, "Personalized for You", "Custom routine just for your skin"],
                 [GiftIcon, "Expert Recommended", "Picked by skincare experts"],
@@ -309,9 +309,9 @@ export default function RoutineBuilderPage() {
           </div>
         </section>
 
-        <section className="px-4 pb-10 sm:px-8 lg:px-14">
-          <div className="mx-auto grid max-w-[1500px] gap-5 lg:grid-cols-[300px_1fr_320px]">
-            <aside className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5">
+        <section className="overflow-hidden px-4 pb-10 sm:px-8 lg:px-14">
+          <div className="mx-auto grid w-full max-w-[1500px] min-w-0 gap-5 lg:grid-cols-[300px_minmax(0,1fr)_320px]">
+            <aside className="min-w-0 rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5">
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-lg font-black text-[#102015]">Your Profile</h2>
                 <button onClick={resetBuilder} className="text-sm font-bold text-[#0b3d2e]">
@@ -339,11 +339,11 @@ export default function RoutineBuilderPage() {
               </div>
             </aside>
 
-            <section className="rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5">
-              <div className="mb-5 flex gap-4 border-b border-[#0b3d2e]/10">
+            <section className="min-w-0 rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5">
+              <div className="mb-5 flex max-w-full gap-4 overflow-x-auto border-b border-[#0b3d2e]/10 scrollbar-hide">
                 <button
                   onClick={() => setRoutineType("morning")}
-                  className={`flex items-center gap-2 border-b-2 px-2 pb-4 text-sm font-black ${
+                  className={`flex shrink-0 items-center gap-2 border-b-2 px-2 pb-4 text-sm font-black ${
                     routineType === "morning"
                       ? "border-[#0b3d2e] text-[#0b3d2e]"
                       : "border-transparent text-[#4f5f49]"
@@ -355,7 +355,7 @@ export default function RoutineBuilderPage() {
 
                 <button
                   onClick={() => setRoutineType("evening")}
-                  className={`flex items-center gap-2 border-b-2 px-2 pb-4 text-sm font-black ${
+                  className={`flex shrink-0 items-center gap-2 border-b-2 px-2 pb-4 text-sm font-black ${
                     routineType === "evening"
                       ? "border-[#0b3d2e] text-[#0b3d2e]"
                       : "border-transparent text-[#4f5f49]"
@@ -366,16 +366,16 @@ export default function RoutineBuilderPage() {
                 </button>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <OptionGroup title="Skin Type" options={skinTypes} selected={selectedSkinType} setSelected={setSelectedSkinType} />
                 <OptionGroup title="Concern" options={concerns} selected={selectedConcern} setSelected={setSelectedConcern} />
                 <OptionGroup title="Lifestyle" options={lifestyles} selected={selectedLifestyle} setSelected={setSelectedLifestyle} />
                 <OptionGroup title="Goal" options={goals} selected={selectedGoal} setSelected={setSelectedGoal} />
               </div>
 
-              <div className="my-7 flex items-center justify-between gap-3 overflow-x-auto pb-2">
+              <div className="my-7 flex max-w-full items-center justify-start gap-3 overflow-x-auto pb-2 scrollbar-hide lg:justify-between">
                 {routineSteps.map((step, index) => (
-                  <div key={step} className="flex min-w-[90px] flex-col items-center">
+                  <div key={step} className="flex min-w-[78px] shrink-0 flex-col items-center sm:min-w-[90px]">
                     <div className="flex h-16 w-16 items-center justify-center rounded-[6px] border border-[#0b3d2e]/20 bg-[#f5f1e8] text-[#0b3d2e]">
                       <ShoppingBag size={24} />
                     </div>
@@ -390,9 +390,9 @@ export default function RoutineBuilderPage() {
                 ))}
               </div>
 
-              <div className="space-y-6">
+              <div className="min-w-0 space-y-6">
                 {productsByStep.map((group, index) => (
-                  <div key={group.step} className="rounded-[6px] border border-[#0b3d2e]/10 p-4">
+                  <div key={group.step} className="min-w-0 overflow-hidden rounded-[6px] border border-[#0b3d2e]/10 p-4">
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div>
                         <h3 className="text-lg font-black text-[#102015]">
@@ -409,12 +409,12 @@ export default function RoutineBuilderPage() {
                         No matching product found for {group.step}. Admin product e matching category/name + quiz fields add korle show korbe.
                       </div>
                     ) : (
-                      <div className="flex gap-5 overflow-x-auto pb-3 scrollbar-hide">
+                      <div className="flex max-w-full gap-3 overflow-x-auto pb-3 scrollbar-hide sm:gap-5">
                         {group.products.map((product) => (
                           <PremiumProductCard
                             key={product.firebaseId || product.id}
                             product={product as any}
-                            className="w-[245px] shrink-0 md:w-[260px]"
+                            className="w-[170px] shrink-0 sm:w-[245px] md:w-[260px]"
                             isWishlisted={wishlist.includes(product.id)}
                             onToggleWishlist={handleToggleWishlist}
                             onAddToCart={handleAddToCart}
@@ -427,7 +427,7 @@ export default function RoutineBuilderPage() {
               </div>
             </section>
 
-            <aside className="h-fit rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 lg:sticky lg:top-[120px]">
+            <aside className="h-fit min-w-0 rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 lg:sticky lg:top-[120px]">
               <h2 className="mb-5 text-lg font-black text-[#102015]">
                 Your Routine Summary
               </h2>
@@ -439,7 +439,7 @@ export default function RoutineBuilderPage() {
                   </div>
                 ) : (
                   selectedRoutineProducts.map((product, index) => (
-                    <div key={product.id} className="grid grid-cols-[58px_1fr] gap-3">
+                    <div key={product.id} className="grid min-w-0 grid-cols-[58px_minmax(0,1fr)] gap-3">
                       <div className="relative h-[58px] w-[58px] rounded-[6px] bg-[#f5f1e8]">
                         <Image
                           src={safeImage(product.image)}
