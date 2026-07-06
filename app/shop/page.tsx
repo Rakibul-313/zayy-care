@@ -791,7 +791,7 @@ function ShopContent() {
                 </h4>
 
                 <div className="space-y-3">
-                  {["All", ...brands.slice(0, 8)].map((brand) => (
+                  {["All", ...brands].map((brand) => (
                     <button
                       key={brand}
                       type="button"

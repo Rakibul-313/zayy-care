@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "next-themes";
 import localFont from "next/font/local";
+import ScrollMemory from "@/components/ScrollMemory";
 
 export const dreamFont = localFont({
   src: "../public/fonts/DreamAvenue.woff2",
@@ -29,10 +30,10 @@ export const metadata: Metadata = {
   creator: "ZAYY Care",
   publisher: "ZAYY Care",
   icons: {
-  icon: "/favicon.png",
-  shortcut: "/favicon.png",
-  apple: "/logo.png",
-},
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -44,6 +45,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={dreamFont.variable}>
         <ThemeProvider attribute="class" defaultTheme="light">
+          <ScrollMemory />
           {children}
         </ThemeProvider>
       </body>

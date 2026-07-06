@@ -62,6 +62,10 @@ const goals = ["Glow", "Hydration", "Clear Skin", "Repair"];
 const morningSteps = ["Cleanser", "Toner", "Serum", "Moisturizer", "Sunscreen"];
 const eveningSteps = ["Cleanser", "Toner", "Serum", "Cream", "Sleeping Mask"];
 
+const ROUTINE_PRODUCTS_CACHE_KEY = "zayy_routine_builder_products_cache";
+const ROUTINE_STATE_CACHE_KEY = "zayy_routine_builder_state_cache";
+const ROUTINE_SCROLL_CACHE_KEY = "zayy_routine_builder_scroll_y";
+
 function safeImage(src?: string) {
   if (!src || src.trim() === "") return "/products/p1.png";
   const image = src.trim();
@@ -103,11 +107,83 @@ export default function RoutineBuilderPage() {
     setCartCount(getCartCount());
     setWishlistCount(getWishlistCount());
 
+    const cachedProducts = sessionStorage.getItem(ROUTINE_PRODUCTS_CACHE_KEY);
+
+    if (cachedProducts) {
+      try {
+        const parsed = JSON.parse(cachedProducts) as RoutineProduct[];
+        setProducts(parsed);
+
+        saveFirebaseProducts(
+          parsed.map((p) => ({
+            id: p.id,
+            slug: p.slug,
+            firebaseId: p.firebaseId,
+            name: p.name,
+            image: p.image,
+            category: p.category,
+            price: p.price,
+            oldPrice: p.oldPrice,
+            stock: p.stock,
+            quantity: 0,
+          }))
+        );
+      } catch {
+        sessionStorage.removeItem(ROUTINE_PRODUCTS_CACHE_KEY);
+      }
+    }
+
+    const cachedState = sessionStorage.getItem(ROUTINE_STATE_CACHE_KEY);
+
+    if (cachedState) {
+      try {
+        const parsed = JSON.parse(cachedState) as {
+          routineType?: "morning" | "evening";
+          selectedSkinType?: string;
+          selectedConcern?: string;
+          selectedLifestyle?: string;
+          selectedGoal?: string;
+        };
+
+        if (parsed.routineType === "morning" || parsed.routineType === "evening") {
+          setRoutineType(parsed.routineType);
+        }
+
+        setSelectedSkinType(parsed.selectedSkinType || "");
+        setSelectedConcern(parsed.selectedConcern || "");
+        setSelectedLifestyle(parsed.selectedLifestyle || "");
+        setSelectedGoal(parsed.selectedGoal || "");
+      } catch {
+        sessionStorage.removeItem(ROUTINE_STATE_CACHE_KEY);
+      }
+    }
+
+    const restoreScroll = () => {
+      const savedScroll = sessionStorage.getItem(ROUTINE_SCROLL_CACHE_KEY);
+      if (!savedScroll) return;
+
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          window.scrollTo(0, Number(savedScroll));
+        }, 120);
+      });
+    };
+
+    restoreScroll();
+
+    const saveScroll = () => {
+      sessionStorage.setItem(ROUTINE_SCROLL_CACHE_KEY, String(window.scrollY));
+    };
+
+    window.addEventListener("scroll", saveScroll, { passive: true });
+    window.addEventListener("beforeunload", saveScroll);
+
     const unsubscribe = onValue(ref(database, "products"), (snapshot) => {
       const data = snapshot.val();
 
       if (!data) {
         setProducts([]);
+        sessionStorage.removeItem(ROUTINE_PRODUCTS_CACHE_KEY);
         return;
       }
 
@@ -140,6 +216,7 @@ export default function RoutineBuilderPage() {
         .filter((p) => p.deleted !== true && p.active !== false);
 
       setProducts(loaded);
+      sessionStorage.setItem(ROUTINE_PRODUCTS_CACHE_KEY, JSON.stringify(loaded));
 
       saveFirebaseProducts(
         loaded.map((p) => ({
@@ -171,12 +248,28 @@ export default function RoutineBuilderPage() {
 
     return () => {
       unsubscribe();
+      saveScroll();
+      window.removeEventListener("scroll", saveScroll);
+      window.removeEventListener("beforeunload", saveScroll);
       window.removeEventListener("wishlistUpdated", updateWishlist);
       window.removeEventListener("cartUpdated", updateCart);
       window.removeEventListener("storage", updateWishlist);
       window.removeEventListener("storage", updateCart);
     };
   }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem(
+      ROUTINE_STATE_CACHE_KEY,
+      JSON.stringify({
+        routineType,
+        selectedSkinType,
+        selectedConcern,
+        selectedLifestyle,
+        selectedGoal,
+      })
+    );
+  }, [routineType, selectedSkinType, selectedConcern, selectedLifestyle, selectedGoal]);
 
   const routineSteps = routineType === "morning" ? morningSteps : eveningSteps;
 
