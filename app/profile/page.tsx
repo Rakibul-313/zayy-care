@@ -2,7 +2,6 @@
 
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import ProfileSidebar from "@/components/ProfileSidebar";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -347,8 +346,7 @@ export default function ProfilePage() {
 
       <main className="min-h-screen bg-[#fafaf7]">
         <section className="px-4 pt-[110px] pb-10 sm:px-8 lg:px-14 lg:pt-[125px]">
-          <div className="mx-auto grid max-w-[1500px] gap-6 lg:grid-cols-[280px_1fr_330px]">
-            <ProfileSidebar />
+          <div className="mx-auto grid max-w-[1500px] gap-6 lg:grid-cols-[1fr_330px]">
 
             <section className="space-y-6">
               <div>
