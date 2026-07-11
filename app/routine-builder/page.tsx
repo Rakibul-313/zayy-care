@@ -2,9 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { onValue, ref } from "firebase/database";
+import { onAuthStateChanged } from "firebase/auth";
+import { onValue, push, ref, set } from "firebase/database";
 import {
   ArrowRight,
   CalendarCheck,
@@ -23,7 +25,7 @@ import {
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import PremiumProductCard from "@/components/ui/PremiumProductCard";
-import { database } from "@/firebase/config";
+import { auth, database } from "@/firebase/config";
 import { addToCart, getCartCount, saveFirebaseProducts } from "@/lib/cart";
 import { getWishlist, getWishlistCount, toggleWishlist } from "@/lib/wishlist";
 
@@ -91,16 +93,27 @@ function matchValue(source: string, selected: string) {
 }
 
 export default function RoutineBuilderPage() {
+  const router = useRouter();
   const [products, setProducts] = useState<RoutineProduct[]>([]);
   const [wishlist, setWishlist] = useState<number[]>([]);
   const [cartCount, setCartCount] = useState(0);
   const [wishlistCount, setWishlistCount] = useState(0);
+  const [savingRoutine, setSavingRoutine] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState("");
 
   const [routineType, setRoutineType] = useState<"morning" | "evening">("morning");
   const [selectedSkinType, setSelectedSkinType] = useState("");
   const [selectedConcern, setSelectedConcern] = useState("");
   const [selectedLifestyle, setSelectedLifestyle] = useState("");
   const [selectedGoal, setSelectedGoal] = useState("");
+
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setCurrentUserId(user?.uid || "");
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
 
   useEffect(() => {
     setWishlist(getWishlist());
@@ -192,6 +205,7 @@ export default function RoutineBuilderPage() {
           firebaseId,
           id: Number(value.id || index + 1),
           name: value.name || "Unnamed Product",
+          slug: value.slug || "",
           brand: value.brand || "ZAYY Care",
           category: value.category || "Korean Skincare",
           image: safeImage(value.image),
@@ -354,6 +368,67 @@ export default function RoutineBuilderPage() {
   const handleAddAllToCart = () => {
     selectedRoutineProducts.forEach((product) => addToCart(product.id));
     setCartCount(getCartCount());
+  };
+
+
+  const handleSaveRoutine = async () => {
+    if (!currentUserId) {
+      
+      router.push("/login");
+      return;
+    }
+
+    if (!selectedSkinType || !selectedConcern || !selectedLifestyle || !selectedGoal) {
+      
+      return;
+    }
+
+    if (selectedRoutineProducts.length === 0) {
+            return;
+    }
+
+    try {
+      setSavingRoutine(true);
+
+      const routineRef = push(
+        ref(database, `users/${currentUserId}/savedRoutines`)
+      );
+
+      const routineProducts = selectedRoutineProducts.map((product, index) => ({
+        id: product.id,
+        slug: product.slug || "",
+        firebaseId: product.firebaseId || "",
+        name: product.name,
+        brand: product.brand || "ZAYY Care",
+        category: product.category,
+        image: product.image,
+        price: Number(product.price || 0),
+        oldPrice: Number(product.oldPrice || product.price || 0),
+        stock: Number(product.stock || 0),
+        step: routineSteps[index] || product.category,
+      }));
+
+      await set(routineRef, {
+        id: routineRef.key,
+        routineType,
+        skinType: selectedSkinType,
+        concern: selectedConcern,
+        lifestyle: selectedLifestyle,
+        goal: selectedGoal,
+        products: routineProducts,
+        estimatedTotal,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+
+      
+      router.push("/profile/routine");
+    } catch (error) {
+      console.error("Failed to save routine:", error);
+    
+    } finally {
+      setSavingRoutine(false);
+    }
   };
 
   const resetBuilder = () => {
@@ -571,9 +646,14 @@ export default function RoutineBuilderPage() {
                 Add All to Cart
               </button>
 
-              <button className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[6px] border border-[#0b3d2e]/15 bg-[#fafaf7] text-sm font-black text-[#0b3d2e]">
+              <button
+                type="button"
+                onClick={handleSaveRoutine}
+                disabled={selectedRoutineProducts.length === 0 || savingRoutine}
+                className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-[6px] border border-[#0b3d2e]/15 bg-[#fafaf7] text-sm font-black text-[#0b3d2e] disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 <Heart size={16} />
-                Save Routine
+                {savingRoutine ? "Saving..." : "Save Routine"}
               </button>
             </aside>
           </div>
