@@ -22,8 +22,6 @@ import {
   X,
 } from "lucide-react";
 
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import { auth, googleProvider } from "@/firebase/config";
 import { isAdminUser } from "@/lib/admin";
 import { acceptAdminInvite } from "@/lib/adminInvite";
@@ -237,10 +235,7 @@ export default function SignupPage() {
 
   return (
     <>
-      <Navbar
-        cartCount={getCartCount()}
-        wishlistCount={getWishlistCount()}
-      />
+      
 
       <main className="min-h-screen bg-[#fafaf7]">
         <section className="flex min-h-[calc(100vh-120px)] items-center justify-center px-4 pb-12 pt-[115px] sm:px-8 lg:px-14 lg:pt-[130px]">
@@ -647,7 +642,7 @@ export default function SignupPage() {
           </div>
         </section>
 
-        <Footer />
+        
       </main>
     </>
   );

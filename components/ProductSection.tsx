@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowRight, RefreshCcw } from "lucide-react";
+import { useEffect, useState } from "react";
 import { onValue, ref } from "firebase/database";
 
 import PremiumProductCard from "@/components/ui/PremiumProductCard";
@@ -29,108 +29,221 @@ type HomeProduct = {
   active?: boolean;
 };
 
+type FirebaseProductValue = {
+  id?: number | string;
+  slug?: string;
+  name?: string;
+  brand?: string;
+  category?: string;
+  image?: string;
+  price?: number | string;
+  oldPrice?: number | string;
+  discount?: number | string;
+  sale?: string;
+  rating?: number | string;
+  reviews?: number | string;
+  stock?: number | string;
+  bestSeller?: boolean;
+  deleted?: boolean;
+  active?: boolean;
+};
+
+const BEST_SELLER_CACHE_KEY = "zayy_home_best_sellers";
+
 function safeImage(src?: string) {
-  if (!src || src.trim() === "") return "/products/p1.png";
-  return src;
+  const cleanSource = src?.trim();
+
+  if (!cleanSource) {
+    return "/products/p1.png";
+  }
+
+  return cleanSource;
+}
+
+function readCachedProducts(): HomeProduct[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const cached = sessionStorage.getItem(BEST_SELLER_CACHE_KEY);
+
+    if (!cached) {
+      return [];
+    }
+
+    const parsed = JSON.parse(cached);
+
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedProducts(products: HomeProduct[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    sessionStorage.setItem(
+      BEST_SELLER_CACHE_KEY,
+      JSON.stringify(products)
+    );
+  } catch {
+    // Cache না হলেও Firebase products স্বাভাবিকভাবে চলবে।
+  }
+}
+
+function ProductCardSkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      className="w-full overflow-hidden rounded-[6px] border border-[#0b3d2e]/10 bg-white"
+    >
+      <div className="aspect-square animate-pulse bg-[#f5f1e8]" />
+
+      <div className="space-y-3 p-3 sm:p-4">
+        <div className="h-3 w-16 animate-pulse rounded bg-[#e7e8e3]" />
+
+        <div className="space-y-2">
+          <div className="h-4 w-full animate-pulse rounded bg-[#e7e8e3]" />
+          <div className="h-4 w-3/4 animate-pulse rounded bg-[#e7e8e3]" />
+        </div>
+
+        <div className="h-3 w-24 animate-pulse rounded bg-[#e7e8e3]" />
+
+        <div className="flex items-end justify-between gap-3 pt-2">
+          <div className="h-6 w-20 animate-pulse rounded bg-[#e7e8e3]" />
+          <div className="h-10 w-10 animate-pulse rounded-[6px] bg-[#e7e8e3]" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function ProductSection() {
-  const containerRef = useRef<HTMLDivElement>(null);
-
   const [products, setProducts] = useState<HomeProduct[]>([]);
   const [wishlist, setWishlist] = useState<number[]>([]);
+
   const [loading, setLoading] = useState(true);
-
-  const scrollLeft = () => {
-    containerRef.current?.scrollBy({
-      left: -340,
-      behavior: "smooth",
-    });
-  };
-
-  const scrollRight = () => {
-    containerRef.current?.scrollBy({
-      left: 340,
-      behavior: "smooth",
-    });
-  };
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    const unsubscribe = onValue(ref(database, "products"), (snapshot) => {
-      const data = snapshot.val();
+    const cachedProducts = readCachedProducts();
 
-      if (!data) {
-        setProducts([]);
-        saveFirebaseProducts([]);
-        setLoading(false);
-        return;
-      }
-
-      const formatted: HomeProduct[] = Object.entries(data)
-        .map(([firebaseId, value]: any, index) => ({
-          firebaseId,
-          id: Number(value.id || index + 1),
-          name: value.name || "Unnamed Product",
-          slug: value.slug || "",
-          brand: value.brand || "ZAYY Care",
-          category: value.category || "Korean Skincare",
-          image: safeImage(value.image),
-          price: Number(value.price || 0),
-          oldPrice: Number(value.oldPrice || value.price || 0),
-          sale: value.discount ? `${value.discount}% OFF` : value.sale || "New",
-          rating: Number(value.rating || 0),
-          reviews: Number(value.reviews || 0),
-          stock: Number(value.stock || 0),
-          bestSeller: value.bestSeller === true,
-          deleted: value.deleted === true,
-          active: value.active !== false,
-        }))
-        .filter(
-          (product) =>
-            product.deleted !== true &&
-            product.active !== false &&
-            product.stock !== 0
-        );
-
-      const finalProducts = formatted.filter(
-        (product) => product.bestSeller === true
-      );
-
-      setProducts(finalProducts);
-
-      saveFirebaseProducts(
-        formatted.map((product) => ({
-          id: product.id,
-          slug: product.slug,
-          firebaseId: product.firebaseId,
-          name: product.name,
-          image: product.image,
-          category: product.category,
-          price: product.price,
-          oldPrice: product.oldPrice,
-          stock: product.stock,
-          quantity: 0,
-        }))
-      );
-
+    if (cachedProducts.length > 0) {
+      setProducts(cachedProducts);
       setLoading(false);
-    });
-
-    return () => unsubscribe();
+    }
   }, []);
 
   useEffect(() => {
-    setWishlist(getWishlist());
+    setLoadError(false);
 
+    const productsRef = ref(database, "products");
+
+    const unsubscribe = onValue(
+      productsRef,
+      (snapshot) => {
+        const data = snapshot.val() as
+          | Record<string, FirebaseProductValue>
+          | null;
+
+        if (!data) {
+          setProducts([]);
+          saveCachedProducts([]);
+          saveFirebaseProducts([]);
+          setLoading(false);
+          return;
+        }
+
+        const formattedProducts: HomeProduct[] = Object.entries(data)
+          .map(([firebaseId, value], index) => {
+            const productId = Number(value.id);
+
+            return {
+              firebaseId,
+              id:
+                Number.isFinite(productId) && productId > 0
+                  ? productId
+                  : index + 1,
+              name: value.name?.trim() || "Unnamed Product",
+              slug: value.slug?.trim() || "",
+              brand: value.brand?.trim() || "ZAYY Care",
+              category:
+                value.category?.trim() || "International Skincare",
+              image: safeImage(value.image),
+              price: Number(value.price || 0),
+              oldPrice: Number(value.oldPrice || value.price || 0),
+              sale: value.discount
+                ? `${Number(value.discount)}% OFF`
+                : value.sale?.trim() || "NEW",
+              rating: Number(value.rating || 0),
+              reviews: Number(value.reviews || 0),
+              stock: Number(value.stock || 0),
+              bestSeller: value.bestSeller === true,
+              deleted: value.deleted === true,
+              active: value.active !== false,
+            };
+          })
+          .filter(
+            (product) =>
+              product.deleted !== true &&
+              product.active !== false &&
+              Number(product.stock) > 0
+          );
+
+        const bestSellerProducts = formattedProducts.filter(
+          (product) => product.bestSeller === true
+        );
+
+        setProducts(bestSellerProducts);
+        saveCachedProducts(bestSellerProducts);
+
+        saveFirebaseProducts(
+          formattedProducts.map((product) => ({
+            id: product.id,
+            slug: product.slug,
+            firebaseId: product.firebaseId,
+            name: product.name,
+            image: product.image,
+            category: product.category,
+            price: product.price,
+            oldPrice: product.oldPrice,
+            stock: product.stock,
+            quantity: 0,
+          }))
+        );
+
+        setLoadError(false);
+        setLoading(false);
+      },
+      () => {
+        setLoadError(true);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [reloadKey]);
+
+  useEffect(() => {
     const updateWishlist = () => {
       setWishlist(getWishlist());
     };
+
+    updateWishlist();
 
     window.addEventListener("wishlistUpdated", updateWishlist);
     window.addEventListener("storage", updateWishlist);
 
     return () => {
-      window.removeEventListener("wishlistUpdated", updateWishlist);
+      window.removeEventListener(
+        "wishlistUpdated",
+        updateWishlist
+      );
       window.removeEventListener("storage", updateWishlist);
     };
   }, []);
@@ -144,53 +257,98 @@ export default function ProductSection() {
     setWishlist(getWishlist());
   };
 
+  const handleRetry = () => {
+    setLoading(true);
+    setLoadError(false);
+    setReloadKey((current) => current + 1);
+  };
+
   return (
-    <section className="px-4 sm:px-8 lg:px-14">
+    <section
+      aria-labelledby="best-sellers-heading"
+      className="px-4 sm:px-8 lg:px-14"
+    >
       <div className="mx-auto w-full max-w-[1820px]">
         <div className="mb-5 flex items-center justify-between gap-4">
-          <h2 className="dream-font text-[38px] leading-none text-[#142012] sm:text-[48px]">
-            Best Sellers <span className="text-[#556B2F]">+</span>
+          <h2
+            id="best-sellers-heading"
+            className="dream-font text-[38px] leading-none text-[#142012] sm:text-[48px]"
+          >
+            Best Sellers{" "}
+            <span className="text-[#556B2F]">+</span>
           </h2>
 
-          <div className="flex items-center gap-4">
+          <Link
+            href="/shop"
+            className="hidden items-center gap-2 text-sm font-black text-[#0b3d2e] transition-all duration-300 hover:-translate-y-0.5 hover:text-[#062a18] sm:inline-flex"
+          >
+            View All Products
+            <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+        </div>
+
+        {loadError && products.length === 0 ? (
+          <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white px-5 py-10 text-center">
+            <p className="font-bold text-[#263421]">
+              Best seller products could not be loaded.
+            </p>
+
+            <p className="mt-2 text-sm text-[#4f5f49]">
+              Please check your internet connection and try again.
+            </p>
+
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="mx-auto mt-5 flex h-11 items-center justify-center gap-2 rounded-[6px] bg-[#0b3d2e] px-5 text-sm font-black text-white transition hover:bg-[#062a18]"
+            >
+              <RefreshCcw size={16} aria-hidden="true" />
+              Try Again
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {loading && products.length === 0
+              ? Array.from({ length: 6 }).map((_, index) => (
+                  <ProductCardSkeleton key={index} />
+                ))
+              : products.map((product) => (
+                  <PremiumProductCard
+                    key={product.firebaseId || product.id}
+                    product={product as any}
+                    href={`/product/${product.slug || product.id}`}
+                    className="w-full transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(11,61,46,0.18)]"
+                    isWishlisted={wishlist.includes(product.id)}
+                    onToggleWishlist={handleToggleWishlist}
+                    onAddToCart={handleAddToCart}
+                  />
+                ))}
+          </div>
+        )}
+
+        {!loading && !loadError && products.length === 0 && (
+          <div className="rounded-[6px] border border-[#0b3d2e]/10 bg-white px-5 py-10 text-center">
+            <p className="font-bold text-[#263421]">
+              No best seller products are available right now.
+            </p>
+
             <Link
               href="/shop"
-              className="hidden items-center gap-2 text-sm font-black text-[#0b3d2e] transition-all duration-300 hover:-translate-y-0.5 hover:text-[#062a18] sm:inline-flex"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-black text-[#0b3d2e] hover:underline"
             >
-              View All Products
-              <ArrowRight size={16} />
+              Browse All Products
+              <ArrowRight size={16} aria-hidden="true" />
             </Link>
-
-            
           </div>
-        </div>
+        )}
 
-        <div
-          ref={containerRef}
-          className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+        <Link
+          href="/shop"
+          className="mt-5 flex h-12 items-center justify-center gap-2 rounded-[6px] border border-[#0b3d2e]/20 bg-white text-sm font-black text-[#0b3d2e] sm:hidden"
         >
-          {loading ? (
-            <div className="glass rounded-[20px] p-8 text-[#263421]">
-              Loading best sellers...
-            </div>
-          ) : products.length === 0 ? (
-            <div className="glass rounded-[20px] p-8 text-[#263421]">
-              No best seller products found.
-            </div>
-          ) : (
-            products.map((product) => (
-              <PremiumProductCard
-                key={product.firebaseId || product.id}
-                product={product as any}
-                href={`/product/${product.slug || product.id}`}
-                className="w-full transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(11,61,46,0.18)]"
-                isWishlisted={wishlist.includes(product.id)}
-                onToggleWishlist={handleToggleWishlist}
-                onAddToCart={handleAddToCart}
-              />
-            ))
-          )}
-        </div>
+          View All Products
+          <ArrowRight size={16} aria-hidden="true" />
+        </Link>
       </div>
     </section>
   );

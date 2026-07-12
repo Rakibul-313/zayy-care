@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { onValue, push, ref, set } from "firebase/database";
@@ -76,6 +77,8 @@ type ReviewType = {
   deleted?: boolean;
   active?: boolean;
 };
+
+const PRODUCT_CACHE_KEY = "zayy_shop_products_cache";
 
 const premiumButtonHover =
   "transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.02] active:translate-y-0";
@@ -182,6 +185,66 @@ export default function ProductPage() {
   };
 
   useEffect(() => {
+    try {
+      const cached = sessionStorage.getItem(PRODUCT_CACHE_KEY);
+
+      if (!cached) return;
+
+      const parsed = JSON.parse(cached) as ProductType[];
+
+      if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+      const normalized = parsed.map((item, index) => ({
+        ...item,
+        id: Number(item.id || index + 1),
+        name: item.name || "Unnamed Product",
+        brand: item.brand || "ZAYY Care",
+        category: item.category || "International Skincare",
+        image: safeImage(item.image),
+        images: Array.isArray(item.images)
+          ? item.images.map((image) => safeImage(image))
+          : [safeImage(item.image)],
+        gallery: Array.isArray(item.gallery)
+          ? item.gallery.map((image) => safeImage(image))
+          : [],
+        price: Number(item.price || 0),
+        oldPrice: Number(item.oldPrice || item.price || 0),
+        discount: Number(item.discount || 0),
+        stock: Number(item.stock || 0),
+        sale: item.sale || "NEW",
+        rating: Number(item.rating || 0),
+        reviews: Number(item.reviews || 0),
+        forText: item.forText || "All Skin Types",
+        concern: item.concern || "Healthy Skin",
+        volume: item.volume || "N/A",
+        description:
+          item.description ||
+          "Carefully selected international skincare product for daily care.",
+        howToUse:
+          item.howToUse ||
+          "Apply gently as directed and use consistently in your skincare routine.",
+        ingredients:
+          item.ingredients ||
+          "See the product packaging for the complete ingredient list.",
+        benefits:
+          item.benefits ||
+          "Supports daily skincare\nEasy to add to your routine",
+      }));
+
+      const cachedProduct = normalized.find(
+        (item) => item.slug === slug || String(item.id) === slug
+      );
+
+      if (cachedProduct) {
+        setFirebaseProducts(normalized);
+        setLoading(false);
+      }
+    } catch {
+      sessionStorage.removeItem(PRODUCT_CACHE_KEY);
+    }
+  }, [slug]);
+
+  useEffect(() => {
     const unsubscribe = onValue(ref(database, "products"), (snapshot) => {
       const data = snapshot.val();
 
@@ -212,7 +275,7 @@ export default function ProductPage() {
             name: value.name || "Unnamed Product",
             slug: value.slug || "",
             brand: value.brand || "ZAYY Care",
-            category: value.category || "Korean Skincare",
+            category: value.category || "International Skincare",
             image: getProductImage(value),
             images: getProductImages(value),
             gallery: getProductImages(value),
@@ -231,7 +294,7 @@ export default function ProductPage() {
             volume: value.volume || "N/A",
             description:
               value.description ||
-              "Premium Korean skincare product for a healthy and glowing routine.",
+              "Carefully selected international skincare product for a healthy and glowing routine.",
             howToUse:
               value.howToUse ||
               "Apply gently after cleansing. Use daily as part of your skincare routine.",
@@ -253,6 +316,16 @@ export default function ProductPage() {
       );
 
       setFirebaseProducts(formatted);
+
+      try {
+        sessionStorage.setItem(
+          PRODUCT_CACHE_KEY,
+          JSON.stringify(formatted)
+        );
+      } catch {
+        // Cache unavailable হলেও page Firebase data দিয়ে চলবে।
+      }
+
       setLoading(false);
     });
 
@@ -562,11 +635,16 @@ export default function ProductPage() {
                           : "border-[#0b3d2e]/10"
                       }`}
                     >
-                      <img
-                        src={image}
-                        alt={`${product.name} ${index + 1}`}
-                        className="h-full w-full object-cover"
-                      />
+                      <div className="relative h-full w-full">
+                        <Image
+                          src={image}
+                          alt={`${product.name} ${index + 1}`}
+                          fill
+                          sizes="96px"
+                          quality={65}
+                          className="object-cover"
+                        />
+                      </div>
                     </button>
                   ))}
 
@@ -622,10 +700,15 @@ export default function ProductPage() {
                   )}
 
                   <div className="absolute inset-0 overflow-hidden">
-                    <img
+                    <Image
                       src={productImages[selectedImage]}
                       alt={product.name}
-                      className="h-full w-full object-cover transition duration-700 hover:scale-[1.04]"
+                      fill
+                      priority
+                      fetchPriority="high"
+                      sizes="(max-width: 1024px) 100vw, 45vw"
+                      quality={82}
+                      className="object-cover transition duration-700 hover:scale-[1.04]"
                     />
                   </div>
                 </div>
@@ -942,8 +1025,8 @@ export default function ProductPage() {
               {[
                 {
                   icon: ShieldCheck,
-                  title: "100% Authentic",
-                  text: "Genuine Korean Products",
+                  title: "Authenticity Focused",
+                  text: "Carefully Selected Products",
                 },
                 {
                   icon: Truck,
@@ -952,8 +1035,8 @@ export default function ProductPage() {
                 },
                 {
                   icon: LockKeyhole,
-                  title: "Secure Payment",
-                  text: "100% Secure Checkout",
+                  title: "Secure Checkout",
+                  text: "Safe Payment Options",
                 },
                 {
                   icon: RefreshCcw,

@@ -1,180 +1,56 @@
-"use client";
+import type { Metadata } from "next";
+import HomeClient from "../components/HomeClient";
 
-import Navbar from "@/components/Navbar";
-import Hero from "@/components/Hero";
-import FeatureBar from "@/components/FeatureBar";
-import CategoryCards from "@/components/CategoryCards";
-import ProductSection from "@/components/ProductSection";
-import BrandStrip from "@/components/BrandStrip";
-import HomeShowcase from "@/components/HomeShowcase";
-import Footer from "@/components/Footer";
-import FeaturedProducts from "@/components/FeaturedProducts";
-import TestimonialsSection from "@/components/TestimonialsSection";
-import NewsletterSection from "@/components/NewsletterSection";
-import FlashSaleSection from "@/components/FlashSaleSection";
-import { motion } from "framer-motion";
+export const metadata: Metadata = {
+  title: "International Skincare & Beauty Products in Bangladesh",
 
+  description:
+    "Shop carefully selected skincare and beauty products from Korean, Japanese, Hong Kong and other international brands in Bangladesh. Discover cleansers, toners, serums, moisturizers, sunscreens and personalized skincare solutions at ZAYY Care.",
 
-export default function Home() {
-  return (
-    <>
-      <Navbar homePremium />
-        <motion.main
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{
-            type: "spring",
-            stiffness: 80,
-            damping: 20,
-          }}
-          className="min-h-screen bg-[#FAFAF7]"
-        >
-          <div className="space-y-10 pb-10 pt-[110px]">
-            <motion.section
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                type: "spring",
-                stiffness: 80,
-                damping: 20,
-                delay: 0.1,
-              }}
-            >
-              <Hero />
-            </motion.section>
+  keywords: [
+    "ZAYY Care",
+    "international skincare Bangladesh",
+    "global beauty products Bangladesh",
+    "Korean skincare Bangladesh",
+    "Japanese skincare Bangladesh",
+    "Hong Kong skincare Bangladesh",
+    "international beauty brands BD",
+    "skincare products Bangladesh",
+    "serum Bangladesh",
+    "sunscreen Bangladesh",
+    "cleanser Bangladesh",
+  ],
 
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.15 }}
-              transition={{
-                type: "spring",
-                stiffness: 80,
-                damping: 20,
-              }}
-            >
-              <FeatureBar />
-            </motion.section>
+  alternates: {
+    canonical: "/",
+  },
 
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.15 }}
-              transition={{
-                type: "spring",
-                stiffness: 80,
-                damping: 20,
-              }}
-            >
-              <CategoryCards />
-            </motion.section>
+  openGraph: {
+    title: "International Skincare & Beauty Products in Bangladesh",
+    description:
+      "Discover carefully selected skincare and beauty products from Korean, Japanese, Hong Kong and other international brands at ZAYY Care.",
+    url: "/",
+    siteName: "ZAYY Care",
+    type: "website",
+    images: [
+      {
+        url: "/logo.png",
+        width: 1200,
+        height: 630,
+        alt: "ZAYY Care International Skincare and Beauty",
+      },
+    ],
+  },
 
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.15 }}
-              transition={{
-                type: "spring",
-                stiffness: 80,
-                damping: 20,
-              }}
-            >
-              <ProductSection />
-            </motion.section>
+  twitter: {
+    card: "summary_large_image",
+    title: "International Skincare & Beauty Products in Bangladesh",
+    description:
+      "Shop skincare and beauty products from trusted international brands at ZAYY Care.",
+    images: ["/logo.png"],
+  },
+};
 
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.15 }}
-              transition={{
-                type: "spring",
-                stiffness: 80,
-                damping: 20,
-              }}
-            >
-              <FeaturedProducts />
-            </motion.section>
-
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.15 }}
-              transition={{
-                type: "spring",
-                stiffness: 80,
-                damping: 20,
-              }}
-            >
-              <FlashSaleSection/>
-            </motion.section>
-
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.15 }}
-              transition={{
-                type: "spring",
-                stiffness: 80,
-                damping: 20,
-              }}
-            >
-              <TestimonialsSection />
-            </motion.section>
-
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.15 }}
-              transition={{
-                type: "spring",
-                stiffness: 80,
-                damping: 20,
-              }}
-            >
-              <BrandStrip />
-            </motion.section>
-
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.15 }}
-              transition={{
-                type: "spring",
-                stiffness: 80,
-                damping: 20,
-              }}
-            >
-              <HomeShowcase />
-            </motion.section>
-
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.15 }}
-              transition={{
-                type: "spring",
-                stiffness: 80,
-                damping: 20,
-              }}
-            >
-              <NewsletterSection />
-            </motion.section>
-
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.15 }}
-              transition={{
-                type: "spring",
-                stiffness: 80,
-                damping: 20,
-              }}
-            >
-              <Footer />
-            </motion.section>
-          </div>
-        </motion.main>
-      </>
-     
-    );
-  }
+export default function HomePage() {
+  return <HomeClient />;
+}
