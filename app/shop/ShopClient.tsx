@@ -274,6 +274,8 @@ function ShopContent() {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showAllProductTypes, setShowAllProductTypes] = useState(false);
+  const [showAllBrands, setShowAllBrands] = useState(false);
   const [shippingSettings, setShippingSettings] =
     useState<ShippingSettings>(defaultShippingSettings);
 
@@ -459,6 +461,18 @@ function ShopContent() {
     return ["All", ...unique];
   }, [products]);
 
+  const visibleProductTypes = useMemo(
+    () => (showAllProductTypes ? productTypes : productTypes.slice(0, 9)),
+    [productTypes, showAllProductTypes]
+  );
+
+  const allBrands = useMemo(() => ["All", ...brands], [brands]);
+
+  const visibleBrands = useMemo(
+    () => (showAllBrands ? allBrands : allBrands.slice(0, 11)),
+    [allBrands, showAllBrands]
+  );
+
   const deliveryTitle =
     !shippingSettings.enabled || shippingSettings.freeShippingEnabled
       ? "Free Delivery"
@@ -586,6 +600,8 @@ function ShopContent() {
     setSelectedBrand("All");
     setSelectedProductType("All");
     setMaxPrice(highestPrice);
+    setShowAllProductTypes(false);
+    setShowAllBrands(false);
   };
 
   const handleAddToCart = (id: number) => {
@@ -792,9 +808,9 @@ function ShopContent() {
         </section>
 
         <section className="px-3 py-6 sm:px-8 sm:py-8 lg:px-14">
-          <div className="mx-auto grid max-w-[1820px] min-w-0 gap-6 sm:gap-8 lg:grid-cols-[250px_1fr]">
+          <div className="mx-auto grid max-w-[1820px] min-w-0 items-start gap-6 sm:gap-8 lg:grid-cols-[250px_1fr]">
             <aside className="hidden lg:block">
-              <div className="sticky top-[120px] rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5">
+              <div className="sticky top-[105px] max-h-[calc(100vh-125px)] overflow-y-auto overscroll-contain rounded-[6px] border border-[#0b3d2e]/10 bg-white p-5 pr-3 [scrollbar-width:thin] [scrollbar-color:#0b3d2e_#f5f1e8]">
                 <div className="mb-5 flex items-center justify-between border-b border-[#0b3d2e]/10 pb-4">
                   <h3 className="text-sm font-black uppercase text-[#102015]">
                     Filter By
@@ -844,15 +860,15 @@ function ShopContent() {
                 </h4>
 
                 <div className="space-y-3">
-                  {productTypes.map((type) => (
+                  {visibleProductTypes.map((type) => (
                     <button
                       key={type}
                       type="button"
                       onClick={() => setSelectedProductType(type)}
-                      className="flex w-full items-center gap-2 text-sm text-[#263421]"
+                      className="flex w-full items-center gap-2 text-left text-sm text-[#263421]"
                     >
                       <span
-                        className={`flex h-4 w-4 items-center justify-center rounded-[3px] border ${
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border ${
                           selectedProductType === type
                             ? "border-[#0b3d2e] bg-[#0b3d2e] text-white"
                             : "border-[#0b3d2e]/20"
@@ -860,10 +876,22 @@ function ShopContent() {
                       >
                         {selectedProductType === type && <Check size={12} />}
                       </span>
-                      {type}
+                      <span className="min-w-0 break-words">{type}</span>
                     </button>
                   ))}
                 </div>
+
+                {productTypes.length > 9 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllProductTypes((current) => !current)}
+                    className="mt-4 text-xs font-black uppercase tracking-wide text-[#0b3d2e] hover:underline"
+                  >
+                    {showAllProductTypes
+                      ? "Show Less"
+                      : `Show More (${productTypes.length - 9})`}
+                  </button>
+                )}
 
                 <div className="my-6 border-t border-[#0b3d2e]/10" />
 
@@ -872,15 +900,15 @@ function ShopContent() {
                 </h4>
 
                 <div className="space-y-3">
-                  {["All", ...brands].map((brand) => (
+                  {visibleBrands.map((brand) => (
                     <button
                       key={brand}
                       type="button"
                       onClick={() => setSelectedBrand(brand)}
-                      className="flex w-full items-center gap-2 text-sm text-[#263421]"
+                      className="flex w-full items-center gap-2 text-left text-sm text-[#263421]"
                     >
                       <span
-                        className={`flex h-4 w-4 items-center justify-center rounded-[3px] border ${
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border ${
                           selectedBrand === brand
                             ? "border-[#0b3d2e] bg-[#0b3d2e] text-white"
                             : "border-[#0b3d2e]/20"
@@ -888,10 +916,22 @@ function ShopContent() {
                       >
                         {selectedBrand === brand && <Check size={12} />}
                       </span>
-                      {brand}
+                      <span className="min-w-0 break-words">{brand}</span>
                     </button>
                   ))}
                 </div>
+
+                {allBrands.length > 11 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllBrands((current) => !current)}
+                    className="mt-4 text-xs font-black uppercase tracking-wide text-[#0b3d2e] hover:underline"
+                  >
+                    {showAllBrands
+                      ? "Show Less"
+                      : `Show More (${allBrands.length - 11})`}
+                  </button>
+                )}
 
                 <div className="my-6 border-t border-[#0b3d2e]/10" />
 
